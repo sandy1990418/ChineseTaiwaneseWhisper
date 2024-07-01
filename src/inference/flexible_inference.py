@@ -3,6 +3,8 @@ import numpy as np
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from peft import PeftModel, PeftConfig
 import logging
+from typing import Generator, List, Union, Tuple
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ class ChineseTaiwaneseASRInference:
             
             # Set the language token without using forced_decoder_ids
             self.language_token = self.processor.tokenizer.convert_tokens_to_ids(f"<|{language}|>")
+            self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task="transcribe")
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise
@@ -59,36 +62,40 @@ class ChineseTaiwaneseASRInference:
             return [f"Error in transcription: {str(e)}"]
 
     @torch.no_grad()
-    def transcribe_stream(self, audio_data, chunk_length_s: float = 30.0):
-        try:
-            audio_data = self._process_audio(audio_data)
-            sample_rate = 16000  # Whisper expects 16kHz audio
-            chunk_length = int(chunk_length_s * sample_rate)
+    def transcribe_stream(self, audio_stream: Generator[np.ndarray, None, None], sample_rate: int = 16000, chunk_length_s: float = 1.0) -> Generator[str, None, None]:
+        chunk_length = int(chunk_length_s * sample_rate)
+        buffer = np.array([], dtype=np.float32)
+
+        for chunk in audio_stream:
+            buffer = np.concatenate([buffer, chunk])
             
-            for i in range(0, len(audio_data), chunk_length):
-                chunk = audio_data[i:i+chunk_length]
-                if len(chunk) < chunk_length:
-                    chunk = np.pad(chunk, (0, chunk_length - len(chunk)), 'constant')
-                
-                inputs = self.processor(chunk, return_tensors="pt", sampling_rate=sample_rate)
-                input_features = inputs.input_features.to(self.device)
-                
-                # Create attention mask for the chunk
-                attention_mask = torch.ones_like(input_features)
-                attention_mask = attention_mask.to(self.device)
-                
+            while len(buffer) >= chunk_length:
+                audio_chunk = buffer[:chunk_length]
+                buffer = buffer[chunk_length:]
+
+                input_features = self.processor(audio_chunk, sampling_rate=sample_rate, return_tensors="pt").input_features
+                input_features = input_features.to(self.device)
+
+                # Generate transcription
                 generated_ids = self.model.generate(
-                    input_features,
-                    attention_mask=attention_mask,
-                    language=self.language,
-                    task="transcribe"
+                    input_features, 
+                    forced_decoder_ids=self.forced_decoder_ids,
+                    language=self.language
                 )
-                
-                chunk_transcription = self.processor.decode(generated_ids[0], skip_special_tokens=True)
-                yield chunk_transcription
-        except Exception as e:
-            logger.error(f"Error in transcribe_stream: {e}")
-            yield f"Error in streaming transcription: {str(e)}"
+                transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                yield transcription.strip()
+
+        # Process any remaining audio in the buffer
+        if len(buffer) > 0:
+            input_features = self.processor(buffer, sampling_rate=sample_rate, return_tensors="pt").input_features
+            input_features = input_features.to(self.device)
+            generated_ids = self.model.generate(
+                input_features, 
+                forced_decoder_ids=self.forced_decoder_ids,
+                language=self.language
+            )
+            transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            yield transcription.strip()
 
     def _process_audio(self, audio, target_length: int = 480000):
         """Process and pad or trim the audio array to target_length."""
