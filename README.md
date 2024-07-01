@@ -145,17 +145,6 @@ If you encounter memory issues on your T4 GPU, try the following:
 3. Increase gradient accumulation steps (`--gradient_accumulation_steps`)
 4. Enable mixed precision training (`--fp16`)
 
-## Contributing
-
-Contributions to improve the project are welcome. Please follow these steps:
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/AmazingFeature`)
-3. Make your changes
-4. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-5. Push to the branch (`git push origin feature/AmazingFeature`)
-6. Open a Pull Request
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
