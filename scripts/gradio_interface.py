@@ -6,7 +6,6 @@ import gradio as gr
 from src.inference.flexible_inference import ChineseTaiwaneseASRInference
 import logging
 import soundfile as sf
-import os
 import tempfile
 
 project_root = str(Path(__file__).resolve().parents[1])
@@ -65,19 +64,6 @@ def transcribe_audio(audio, model_choice, use_peft, inference_type):
     except Exception as e:
         logger.error(f"Error in transcribe_audio: {e}", exc_info=True)
         return f"An error occurred: {str(e)}"
-
-def process_audio(audio):
-    if audio is None:
-        return None
-    if isinstance(audio, str):  # It's a file path
-        return audio
-    elif isinstance(audio, (tuple, list)):  # It's from microphone
-        # Save the audio to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-            sf.write(temp_audio.name, audio[1], audio[0])
-        return temp_audio.name
-    else:
-        raise ValueError(f"Unexpected audio type: {type(audio)}")
 
 def create_gradio_interface():
     with gr.Blocks() as demo:

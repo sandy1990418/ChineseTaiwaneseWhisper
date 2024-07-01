@@ -23,8 +23,8 @@ class ChineseTaiwaneseASRInference:
             self.model.to(device)
             self.processor = WhisperProcessor.from_pretrained(model_path)
             
-            # Set the language token
-            self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task="transcribe")
+            # Set the language token without using forced_decoder_ids
+            self.language_token = self.processor.tokenizer.convert_tokens_to_ids(f"<|{language}|>")
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise
@@ -41,10 +41,15 @@ class ChineseTaiwaneseASRInference:
             inputs = self.processor(audio_batch, return_tensors="pt", padding=True, sampling_rate=16000)
             input_features = inputs.input_features.to(self.device)
             
+            # Create attention mask
+            attention_mask = torch.ones_like(input_features)
+            attention_mask = attention_mask.to(self.device)
+            
             generated_ids = self.model.generate(
                 input_features,
-                forced_decoder_ids=self.forced_decoder_ids,
-                language=self.language
+                attention_mask=attention_mask,
+                language=self.language,
+                task="transcribe"
             )
             
             transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
@@ -68,10 +73,15 @@ class ChineseTaiwaneseASRInference:
                 inputs = self.processor(chunk, return_tensors="pt", sampling_rate=sample_rate)
                 input_features = inputs.input_features.to(self.device)
                 
+                # Create attention mask for the chunk
+                attention_mask = torch.ones_like(input_features)
+                attention_mask = attention_mask.to(self.device)
+                
                 generated_ids = self.model.generate(
                     input_features,
-                    forced_decoder_ids=self.forced_decoder_ids,
-                    language=self.language
+                    attention_mask=attention_mask,
+                    language=self.language,
+                    task="transcribe"
                 )
                 
                 chunk_transcription = self.processor.decode(generated_ids[0], skip_special_tokens=True)
