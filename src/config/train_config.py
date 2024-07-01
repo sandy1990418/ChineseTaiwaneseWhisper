@@ -1,0 +1,120 @@
+from dataclasses import dataclass, field
+from typing import Optional
+from transformers import Seq2SeqTrainingArguments
+
+@dataclass
+class ModelArguments:
+    model_name_or_path: str = field(
+        default="openai/whisper-small",
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    use_lora: bool = field(
+        default=False,
+        metadata={"help": "Whether to use LoRA for fine-tuning"}
+    )
+    lora_r: int = field(
+        default=8,
+        metadata={"help": "LoRA attention dimension"}
+    )
+    lora_alpha: int = field(
+        default=32,
+        metadata={"help": "LoRA alpha"}
+    )
+    lora_dropout: float = field(
+        default=0.1,
+        metadata={"help": "LoRA dropout"}
+    )
+
+@dataclass
+class DataArguments:
+    dataset_name: str = field(
+        default="mozilla-foundation/common_voice_11_0",
+        metadata={"help": "The name of the dataset to use (via the datasets library)"}
+    )
+    dataset_config_name: Optional[str] = field(
+        default=None, 
+        metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
+    )
+    text_column: str = field(
+        default="text",
+        metadata={"help": "The name of the column in the datasets containing the full texts."},
+    )
+    audio_column: str = field(
+        default="audio",
+        metadata={"help": "The name of the column in the datasets containing the audio files"},
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={"help": "For debugging purposes or quicker training, truncate the number of training examples to this value if set."}
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={"help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this value if set."}
+    )
+    preprocessing_num_workers: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+
+@dataclass
+class WhisperTrainingArguments(Seq2SeqTrainingArguments):
+    output_dir: str = field(
+        default="./whisper-finetuned",
+        metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
+    )
+    per_device_train_batch_size: int = field(
+        default=16, 
+        metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
+    )
+    per_device_eval_batch_size: int = field(
+        default=8,
+        metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
+    )
+    num_train_epochs: float = field(
+        default=3.0, 
+        metadata={"help": "Total number of training epochs to perform."}
+    )
+    warmup_steps: int = field(
+        default=500, 
+        metadata={"help": "Linear warmup over warmup_steps."}
+    )
+    learning_rate: float = field(
+        default=3e-4, 
+        metadata={"help": "The initial learning rate for AdamW."}
+    )
+    fp16: bool = field(
+        default=True,
+        metadata={"help": "Whether to use 16-bit (mixed) precision instead of 32-bit"}
+    )
+    evaluation_strategy: str = field(
+        default="steps",
+        metadata={"help": "The evaluation strategy to use."}
+    )
+    save_steps: int = field(
+        default=1000,
+        metadata={"help": "Save checkpoint every X updates steps."}
+    )
+    eval_steps: int = field(
+        default=1000,
+        metadata={"help": "Run an evaluation every X steps."}
+    )
+    logging_steps: int = field(
+        default=10,
+        metadata={"help": "Log every X updates steps."}
+    )
+    save_total_limit: Optional[int] = field(
+        default=2,
+        metadata={"help": "Limit the total amount of checkpoints."}
+    )
+    metric_for_best_model: str = field(
+        default="wer",
+        metadata={"help": "The metric to use to compare two different models."}
+    )
+    greater_is_better: bool = field(
+        default=False,
+        metadata={"help": "Whether the `metric_for_best_model` should be maximized or not."}
+    )
+    load_best_model_at_end: bool = field(
+        default=True,
+        metadata={"help": "Whether or not to load the best model found during training at the end of training."}
+    )
