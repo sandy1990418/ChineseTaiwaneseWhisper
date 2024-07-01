@@ -43,14 +43,14 @@ chinese_taiwanese_whisper_asr/
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/chinese-taiwanese-whisper-asr.git
-   cd chinese-taiwanese-whisper-asr
+   git clone https://github.com/sandy1990418/ChineseTaiwaneseWhisper.git
+   cd ChineseTaiwaneseWhisper
    ```
 
 2. Create a virtual environment and activate it:
    ```
    python -m venv venv
-   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+   source venv/bin/activate 
    ```
 
 3. Install the required packages:
