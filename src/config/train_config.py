@@ -8,9 +8,17 @@ class ModelArguments:
         default="openai/whisper-small",
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
-    use_lora: bool = field(
+    language: str = field(
+        default="chinese",
+        metadata={"help": "Language code for the model (e.g., zh-TW for Traditional Chinese)"}
+    )
+    use_peft: bool = field(
         default=False,
-        metadata={"help": "Whether to use LoRA for fine-tuning"}
+        metadata={"help": "Whether to use PEFT for fine-tuning"}
+    )
+    peft_method: str = field(
+        default="lora",
+        metadata={"help": "PEFT method to use: lora, ia3, adaption_prompt, prefix_tuning, p_tuning"}
     )
     lora_r: int = field(
         default=8,
@@ -36,7 +44,7 @@ class DataArguments:
         metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
     )
     text_column: str = field(
-        default="text",
+        default="sentence",
         metadata={"help": "The name of the column in the datasets containing the full texts."},
     )
     audio_column: str = field(

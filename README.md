@@ -67,7 +67,7 @@ To train the model, run:
 ```
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --language "zh-TW" \
+                        --language "chinese" \
                         --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 8 \

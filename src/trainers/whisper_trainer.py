@@ -1,13 +1,10 @@
-from typing import Dict, Any
-from transformers import Seq2SeqTrainer, WhisperProcessor, WhisperForConditionalGeneration
-from datasets import load_metric
+from transformers import Seq2SeqTrainer
+import evaluate
 import torch
-from torch.utils.data import Dataset
-from transformers import Seq2SeqTrainingArguments
 
-wer_metric = load_metric("wer")
+wer_metric = evaluate.load("wer")
 
-def compute_metrics(pred: Any) -> Dict[str, float]:
+def compute_metrics(pred):
     pred_ids = pred.predictions
     label_ids = pred.label_ids
 
@@ -22,12 +19,16 @@ def compute_metrics(pred: Any) -> Dict[str, float]:
 
     return {"wer": wer}
 
-def get_trainer(model: WhisperForConditionalGeneration, 
-                args: Seq2SeqTrainingArguments, 
-                train_dataset: Dataset, 
-                eval_dataset: Dataset, 
-                data_collator: Any, 
-                processor: WhisperProcessor) -> Seq2SeqTrainer:
+# class WhisperTrainer(Seq2SeqTrainer):
+#     def compute_loss(self, model, inputs, return_outputs=False):
+#         input_features = inputs.get("input_features")
+#         labels = inputs.get("labels")
+#         outputs = model(input_features=input_features, labels=labels)
+
+#         loss = outputs.loss
+#         return (loss, outputs) if return_outputs else loss
+
+def get_trainer(model, args, train_dataset, eval_dataset, data_collator, processor):
     return Seq2SeqTrainer(
         model=model,
         args=args,
