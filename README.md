@@ -80,7 +80,7 @@ For PEFT fine-tuning (e.g., using LoRA), add the `--use_peft` flag:
 ```
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --language "zh-TW" \
+                        --language "chinese" \
                         --output_dir "./whisper-peft-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
