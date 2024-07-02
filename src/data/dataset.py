@@ -1,6 +1,4 @@
-from typing import Optional, Any, Dict, List, Union
-import torch
-import numpy as np
+from typing import Optional
 from torch.utils.data import Dataset
 from datasets import load_dataset
 from transformers import WhisperProcessor
@@ -10,6 +8,7 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class ChineseTaiwaneseDataset(Dataset):
     def __init__(self, 

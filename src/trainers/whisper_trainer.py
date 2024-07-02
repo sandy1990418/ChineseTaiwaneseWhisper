@@ -1,8 +1,8 @@
 from transformers import Seq2SeqTrainer
 import evaluate
-import torch
 
 wer_metric = evaluate.load("wer")
+
 
 def compute_metrics(pred):
     pred_ids = pred.predictions
@@ -27,6 +27,7 @@ def compute_metrics(pred):
 
 #         loss = outputs.loss
 #         return (loss, outputs) if return_outputs else loss
+
 
 def get_trainer(model, args, train_dataset, eval_dataset, data_collator, processor):
     return Seq2SeqTrainer(

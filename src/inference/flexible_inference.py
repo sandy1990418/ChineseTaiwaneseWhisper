@@ -3,11 +3,12 @@ import numpy as np
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from peft import PeftModel, PeftConfig
 import logging
-from typing import Generator, List, Union, Tuple
-
+from typing import Generator
+from collections import deque
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class ChineseTaiwaneseASRInference:
     def __init__(self, model_path: str, device: str = "cuda", use_peft: bool = False, language: str = "chinese"):
@@ -62,18 +63,28 @@ class ChineseTaiwaneseASRInference:
             return [f"Error in transcription: {str(e)}"]
 
     @torch.no_grad()
-    def transcribe_stream(self, audio_stream: Generator[np.ndarray, None, None], sample_rate: int = 16000, chunk_length_s: float = 1.0) -> Generator[str, None, None]:
+    def transcribe_stream(
+            self, 
+            audio_stream: Generator[np.ndarray, None, None], 
+            sample_rate: int = 16000, 
+            chunk_length_s: float = 30.0, 
+            stride_length_s: float = 5.0) -> Generator[str, None, None]:
         chunk_length = int(chunk_length_s * sample_rate)
-        buffer = np.array([], dtype=np.float32)
-
+        stride_length = int(stride_length_s * sample_rate)
+        audio_buffer = deque(maxlen=chunk_length)
+        
         for chunk in audio_stream:
-            buffer = np.concatenate([buffer, chunk])
+            # Add new audio chunk to the buffer
+            audio_buffer.extend(chunk)
             
-            while len(buffer) >= chunk_length:
-                audio_chunk = buffer[:chunk_length]
-                buffer = buffer[chunk_length:]
-
-                input_features = self.processor(audio_chunk, sampling_rate=sample_rate, return_tensors="pt").input_features
+            # Process when buffer reaches chunk_length
+            if len(audio_buffer) >= chunk_length:
+                audio_chunk = np.array(audio_buffer)
+                
+                # Process audio chunk
+                input_features = self.processor(audio_chunk, 
+                                                sampling_rate=sample_rate, 
+                                                return_tensors="pt").input_features
                 input_features = input_features.to(self.device)
 
                 # Generate transcription
@@ -85,9 +96,17 @@ class ChineseTaiwaneseASRInference:
                 transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
                 yield transcription.strip()
 
+                # Remove strided part from the beginning of the buffer
+                for _ in range(stride_length):
+                    if audio_buffer:
+                        audio_buffer.popleft()
+
         # Process any remaining audio in the buffer
-        if len(buffer) > 0:
-            input_features = self.processor(buffer, sampling_rate=sample_rate, return_tensors="pt").input_features
+        if audio_buffer:
+            remaining_audio = np.array(audio_buffer)
+            input_features = self.processor(remaining_audio, 
+                                            sampling_rate=sample_rate, 
+                                            return_tensors="pt").input_features
             input_features = input_features.to(self.device)
             generated_ids = self.model.generate(
                 input_features, 

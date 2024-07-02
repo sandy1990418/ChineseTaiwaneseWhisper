@@ -5,7 +5,8 @@ from src.model.whisper_model import load_whisper_model
 from src.data.dataset import ChineseTaiwaneseDataset
 from src.data.data_collator import WhisperDataCollator
 from src.trainers.whisper_trainer import get_trainer
-from peft import LoraConfig, TaskType
+# from peft import LoraConfig, TaskType
+
 
 def main():
     parser = HfArgumentParser((ModelArguments, DataArguments, Seq2SeqTrainingArguments))
@@ -46,7 +47,6 @@ def main():
                                            max_samples=data_args.max_eval_samples,
                                            language=model_args.language)
 
-
     data_collator = WhisperDataCollator(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
@@ -65,6 +65,7 @@ def main():
 
     trainer.save_model(training_args.output_dir)
     processor.save_pretrained(training_args.output_dir)
+
 
 if __name__ == "__main__":
     main()

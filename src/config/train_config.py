@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from transformers import Seq2SeqTrainingArguments
 
+
 @dataclass
 class ModelArguments:
     model_name_or_path: str = field(
@@ -33,6 +34,7 @@ class ModelArguments:
         metadata={"help": "LoRA dropout"}
     )
 
+
 @dataclass
 class DataArguments:
     dataset_name: str = field(
@@ -53,16 +55,19 @@ class DataArguments:
     )
     max_train_samples: Optional[int] = field(
         default=None,
-        metadata={"help": "For debugging purposes or quicker training, truncate the number of training examples to this value if set."}
+        metadata={"help": "For debugging purposes or quicker training, truncate the number of \
+                  training examples to this value if set."}
     )
     max_eval_samples: Optional[int] = field(
         default=None,
-        metadata={"help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this value if set."}
+        metadata={"help": "For debugging purposes or quicker training, truncate the number of\
+                   evaluation examples to this value if set."}
     )
     preprocessing_num_workers: Optional[int] = field(
         default=None,
         metadata={"help": "The number of processes to use for the preprocessing."},
     )
+
 
 @dataclass
 class WhisperTrainingArguments(Seq2SeqTrainingArguments):

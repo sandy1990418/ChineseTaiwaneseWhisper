@@ -1,17 +1,14 @@
 from dataclasses import dataclass
 from typing import Dict, List
 import torch
-from transformers import WhisperProcessor
 import logging
+from dataclasses import dataclass
+from typing import Any, Union
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-import torch
-
-from dataclasses import dataclass
-from typing import Any, Dict, List, Union
 
 @dataclass
 class WhisperDataCollator:

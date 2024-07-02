@@ -1,7 +1,13 @@
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from peft import get_peft_model, LoraConfig, TaskType
 
-def load_whisper_model(model_name_or_path: str, use_peft: bool = False, peft_config: dict = None, language: str = "chinese"):
+
+def load_whisper_model(
+        model_name_or_path: str, 
+        use_peft: bool = False, 
+        peft_config: dict = None, 
+        language: str = "chinese"
+        ):
     model = WhisperForConditionalGeneration.from_pretrained(model_name_or_path)
     processor = WhisperProcessor.from_pretrained(model_name_or_path)
 
