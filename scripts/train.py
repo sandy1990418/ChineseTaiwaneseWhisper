@@ -2,7 +2,7 @@ import sys
 from transformers import HfArgumentParser, Seq2SeqTrainingArguments
 from src.config.train_config import ModelArguments, DataArguments
 from src.model.whisper_model import load_whisper_model
-from src.data.dataset import ChineseTaiwaneseDataset
+from src.data.dataset import ChineseTaiwaneseDataset  # ChineseTaiwaneseDataset
 from src.data.data_collator import WhisperDataCollator
 from src.trainers.whisper_trainer import get_trainer
 # from peft import LoraConfig, TaskType
@@ -39,13 +39,23 @@ def main():
                                             text_column=data_args.text_column,
                                             audio_column=data_args.audio_column,
                                             max_samples=data_args.max_train_samples,
-                                            language=model_args.language)
+                                            dataset_config_name=data_args.dataset_config_name)
     
     eval_dataset = ChineseTaiwaneseDataset(data_args.dataset_name, "validation", processor, 
                                            text_column=data_args.text_column,
                                            audio_column=data_args.audio_column,
                                            max_samples=data_args.max_eval_samples,
-                                           language=model_args.language)
+                                           dataset_config_name=data_args.dataset_config_name)
+
+    # datasets = create_dataset(
+    #     dataset_name=data_args.dataset_name,
+    #     processor=processor,
+    #     text_column=data_args.text_column,
+    #     audio_column=data_args.audio_column,
+    #     max_train_samples=data_args.max_train_samples,
+    #     max_eval_samples=data_args.max_eval_samples,
+    #     youtube_dir=data_args.youtube_data_dir
+    # )
 
     data_collator = WhisperDataCollator(
         processor=processor,

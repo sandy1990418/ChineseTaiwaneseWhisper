@@ -42,7 +42,7 @@ class DataArguments:
         metadata={"help": "The name of the dataset to use (via the datasets library)"}
     )
     dataset_config_name: Optional[str] = field(
-        default=None, 
+        default="zh-TW", 
         metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
     )
     text_column: str = field(
@@ -64,8 +64,16 @@ class DataArguments:
                    evaluation examples to this value if set."}
     )
     preprocessing_num_workers: Optional[int] = field(
-        default=None,
+        default=1,
         metadata={"help": "The number of processes to use for the preprocessing."},
+    )
+    youtube_data_dir: str = field(
+        default="./youtube_data",
+        metadata={"help": "Directory containing YouTube audio and subtitle data"}
+    )
+    max_input_length: int = field(
+        default=30,
+        metadata={"help": "Maximum input length in seconds for audio clips"}
     )
 
 
@@ -130,4 +138,8 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     load_best_model_at_end: bool = field(
         default=True,
         metadata={"help": "Whether or not to load the best model found during training at the end of training."}
+    )
+    max_steps: int = field(
+        default=-1,
+        metadata={"help": "If > 0: set total number of training steps to perform. Override num_train_epochs."}
     )

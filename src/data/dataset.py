@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import Optional  # , List, Tuple
 from torch.utils.data import Dataset
 from datasets import load_dataset
 from transformers import WhisperProcessor
 import librosa
 import logging
+# import multiprocessing
+# import os
+# from src.config.train_config import DataArguments
 
 
 logging.basicConfig(level=logging.INFO)
@@ -18,14 +21,14 @@ class ChineseTaiwaneseDataset(Dataset):
                  text_column: str = "sentence",
                  audio_column: str = "audio",
                  max_samples: Optional[int] = None,
-                 language: str = "zh-TW"):
-        self.dataset = load_dataset(dataset_name, "zh-TW", split=split)
+                 dataset_config_name: str = "zh-TW"):
+        self.dataset = load_dataset(dataset_name, dataset_config_name, split=split)
         if max_samples is not None:
             self.dataset = self.dataset.select(range(min(max_samples, len(self.dataset))))
         self.processor = processor
         self.text_column = text_column
         self.audio_column = audio_column
-        self.language = language
+        self.dataset_config_name = dataset_config_name
 
     def __len__(self) -> int:
         return len(self.dataset)

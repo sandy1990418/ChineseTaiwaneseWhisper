@@ -66,12 +66,14 @@ To train the model, run:
 
 ```
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
-                        --dataset_name "mozilla-foundation/common_voice_11_0" \
                         --language "chinese" \
-                        --output_dir "./whisper-finetuned-zh-tw" \
+                        --dataset_name "mozilla-foundation/common_voice_11_0" \
+                        --dataset_config_name "zh-TW" \
+                        --youtube_data_dir "./youtube_data" \
+                        --output_dir "./whisper-peft-finetuned-zh-tw" \
                         --num_train_epochs 3 \
-                        --per_device_train_batch_size 8 \
-                        --learning_rate 5e-5 \
+                        --per_device_train_batch_size 16 \
+                        --learning_rate 3e-5 \
                         --fp16
 ```
 
@@ -79,15 +81,17 @@ For PEFT fine-tuning (e.g., using LoRA), add the `--use_peft` flag:
 
 ```
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
-                        --dataset_name "mozilla-foundation/common_voice_11_0" \
                         --language "chinese" \
+                        --use_peft \
+                        --peft_method "lora" \
+                        --dataset_name "mozilla-foundation/common_voice_11_0" \
+                        --dataset_config_name "zh-TW" \
+                        --youtube_data_dir "./youtube_data" \
                         --output_dir "./whisper-peft-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
-                        --learning_rate 1e-4 \
-                        --fp16 \
-                        --use_peft \
-                        --peft_method "lora"
+                        --learning_rate 3e-5 \
+                        --fp16
 ```
 
 ### Inference
