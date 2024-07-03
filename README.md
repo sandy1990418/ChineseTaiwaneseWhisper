@@ -106,6 +106,28 @@ This will start a web server, and you'll see a URL in the console (usually `http
 
 **Note** : To use streaming mode, please open the Gradio link in Chrome instead of Safari to avoid running out of CPU memory.
 
+
+### Audio Crawler
+
+Run the YouTube crawler using the following command:
+
+```bash
+python src/crawler/youtube_crawler.py \
+       --playlist_urls "YOUTUBE_PLAYLIST_URL" \
+       --output_dir ./youtube_data \
+       --dataset_name youtube_asr_dataset \
+       --file_prefix language_prefix
+```
+Arguments
+
+- playlist_urls: One or more YouTube playlist URLs to crawl (required)
+- output_dir: Directory to save audio files and dataset (default: "./output")
+- dataset_name: Name of the output dataset file (default: "youtube_dataset")
+- ffmpeg_path: Path to FFmpeg executable (optional, use if FFmpeg is not in PATH)
+- file_prefix: Prefix for audio and subtitle files (default: "youtube")
+
+<br>
+
 ## Customization
 
 - To use a different dataset, modify the `dataset_name` parameter in the training script.
