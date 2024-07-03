@@ -9,3 +9,4 @@ wheels/
 flagged/
 whisper-finetuned-zh-tw/
 whisper-peft-finetuned-zh-tw/
+asr_transcription_streaming_cache

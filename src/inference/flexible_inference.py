@@ -66,8 +66,8 @@ class ChineseTaiwaneseASRInference:
     def transcribe_stream(self, 
                           audio_stream: Generator[np.ndarray, None, None], 
                           sample_rate: int = 16000, 
-                          chunk_length_s: float = 10.0, 
-                          stride_length_s: float = 2.0) -> Generator[str, None, None]:
+                          chunk_length_s: float = 30.0, 
+                          stride_length_s: float = 5.0) -> Generator[str, None, None]:
         chunk_length = int(chunk_length_s * sample_rate)
         stride_length = int(stride_length_s * sample_rate)
         audio_buffer = deque(maxlen=chunk_length)

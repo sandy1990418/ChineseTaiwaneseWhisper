@@ -3,6 +3,11 @@ import numpy as np
 import torch
 from src.inference.flexible_inference import ChineseTaiwaneseASRInference
 from scipy import signal
+import os 
+from datetime import datetime
+
+cache_dir = os.path.join(os.getcwd(), "asr_transcription_streaming_cache")
+os.makedirs(cache_dir, exist_ok=True)
 
 
 class ASRProcessor:
@@ -30,6 +35,23 @@ class ASRProcessor:
 asr_processor = ASRProcessor()
 
 
+def log_to_file(message):
+    log_file = os.path.join(cache_dir, "asr_log.txt")
+    with open(log_file, "a") as f:
+        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {message}\n")
+
+
+def convert_audio_sampling(audio):
+    sr, y = audio
+    y = y.astype(np.float32)
+    y /= np.max(np.abs(y))
+
+    y = resample_audio(y, sr, 16000)
+    sr = 16000
+
+    return y, sr
+
+
 def resample_audio(y, orig_sr, target_sr):
     if orig_sr != target_sr:
         num_samples = int(len(y) * float(target_sr) / orig_sr)
@@ -41,12 +63,7 @@ def transcribe_batch(audio, model_choice, use_peft):
     if audio is None:
         return "No audio input provided."
     
-    sr, y = audio
-    y = y.astype(np.float32)
-    y /= np.max(np.abs(y))
-
-    y = resample_audio(y, sr, 16000)
-    sr = 16000
+    y, _ = convert_audio_sampling(audio)
 
     transcription = asr_processor.model.transcribe_batch([y])[0]
     return transcription
@@ -56,20 +73,17 @@ def transcribe_stream(audio, model_choice, use_peft):
     if audio is None:
         return "No audio input provided."
     
-    sr, y = audio
-    y = y.astype(np.float32)
-    y /= np.max(np.abs(y))
-
-    y = resample_audio(y, sr, 16000)
-    sr = 16000
+    y, sr = convert_audio_sampling(audio)
 
     chunk_size = int(sr * 5)  # 5 second chunks
     transcription = ""
-
+    
     for i in range(0, len(y), chunk_size):
         chunk = y[i:i+chunk_size]
         chunk_transcription = next(asr_processor.model.transcribe_stream([chunk], sample_rate=sr))
         transcription += chunk_transcription + " "
+
+        log_to_file(chunk_transcription)
         yield transcription.strip()
 
 
