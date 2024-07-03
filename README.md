@@ -102,9 +102,9 @@ To run the Gradio interface for interactive inference:
 python scripts/gradio_interface.py
 ```
 
-Note : To use streaming mode, please open the Gradio link in Chrome instead of Safari to avoid running out of CPU memory.
-
 This will start a web server, and you'll see a URL in the console (usually `http://127.0.0.1:7860`). Open this URL in your web browser to access the Gradio interface.
+
+**Note** : To use streaming mode, please open the Gradio link in Chrome instead of Safari to avoid running out of CPU memory.
 
 ## Customization
 
