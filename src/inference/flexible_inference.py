@@ -63,12 +63,11 @@ class ChineseTaiwaneseASRInference:
             return [f"Error in transcription: {str(e)}"]
 
     @torch.no_grad()
-    def transcribe_stream(
-            self, 
-            audio_stream: Generator[np.ndarray, None, None], 
-            sample_rate: int = 16000, 
-            chunk_length_s: float = 30.0, 
-            stride_length_s: float = 5.0) -> Generator[str, None, None]:
+    def transcribe_stream(self, 
+                          audio_stream: Generator[np.ndarray, None, None], 
+                          sample_rate: int = 16000, 
+                          chunk_length_s: float = 10.0, 
+                          stride_length_s: float = 2.0) -> Generator[str, None, None]:
         chunk_length = int(chunk_length_s * sample_rate)
         stride_length = int(stride_length_s * sample_rate)
         audio_buffer = deque(maxlen=chunk_length)
@@ -116,7 +115,7 @@ class ChineseTaiwaneseASRInference:
             transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             yield transcription.strip()
 
-    def _process_audio(self, audio, target_length: int = 480000):
+    def _process_audio(self, audio, target_length: int = 16000):
         """Process and pad or trim the audio array to target_length."""
         if isinstance(audio, np.ndarray):
             audio_array = audio

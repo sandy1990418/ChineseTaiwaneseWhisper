@@ -23,7 +23,7 @@ class ASRProcessor:
             model_path, 
             device=self.device, 
             use_peft=use_peft, 
-            language="english"
+            language="chinese"
         )
 
 
@@ -147,4 +147,4 @@ def create_interface():
 
 if __name__ == "__main__":
     demo = create_interface()
-    demo.launch()
+    demo.launch(share=True)
