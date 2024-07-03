@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 from transformers import Seq2SeqTrainingArguments
 
 
@@ -142,4 +142,37 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     max_steps: int = field(
         default=-1,
         metadata={"help": "If > 0: set total number of training steps to perform. Override num_train_epochs."}
+    )
+
+
+@dataclass
+class CrawlerArgs:
+    # List of YouTube playlist URLs to crawl
+    playlist_urls: List[str] = field(
+        default_factory=list,
+        metadata={"help": "YouTube playlist URLs to crawl"}
+    )
+
+    # Directory to save audio files and dataset
+    output_dir: str = field(
+        default="./output",
+        metadata={"help": "Directory to save audio files and dataset"}
+    )
+
+    # Name of the output dataset file
+    dataset_name: str = field(
+        default="youtube_dataset",
+        metadata={"help": "Name of the output dataset file"}
+    )
+
+    # Path to FFmpeg executable (optional)
+    ffmpeg_path: Optional[str] = field(
+        default=None,
+        metadata={"help": "Path to FFmpeg executable"}
+    )
+
+    # Prefix for audio and subtitle files
+    file_prefix: str = field(
+        default="youtube",
+        metadata={"help": "Prefix for audio and subtitle files"}
     )
