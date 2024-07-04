@@ -123,7 +123,6 @@ Arguments
 - playlist_urls: One or more YouTube playlist URLs to crawl (required)
 - output_dir: Directory to save audio files and dataset (default: "./output")
 - dataset_name: Name of the output dataset file (default: "youtube_dataset")
-- ffmpeg_path: Path to FFmpeg executable (optional, use if FFmpeg is not in PATH)
 - file_prefix: Prefix for audio and subtitle files (default: "youtube")
 
 <br>
