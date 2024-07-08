@@ -172,6 +172,29 @@ If you encounter memory issues on your T4 GPU, try the following:
 3. Increase gradient accumulation steps (`--gradient_accumulation_steps`)
 4. Enable mixed precision training (`--fp16`)
 
+<br>
+
+```mermaid
+graph TD
+    A[Start] --> B[Initialize Audio Stream]
+    B --> C[Initialize ASR Model]
+    C --> D[Initialize Audio Buffer]
+    D --> E{Receive Audio Chunk}
+    E --> |Yes| F[Add to Audio Buffer]
+    F --> G{Buffer Full?}
+    G --> |No| E
+    G --> |Yes| H[Process Audio Buffer]
+    H --> I[Generate Partial Transcription]
+    I --> J[Output Partial Transcription]
+    J --> K[Slide Buffer]
+    K --> E
+    E --> |No| L[Finalize Transcription]
+    L --> M[End]
+
+```
+
+<br>
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

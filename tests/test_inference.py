@@ -2,9 +2,14 @@ import pytest
 import numpy as np
 from src.inference.flexible_inference import ChineseTaiwaneseASRInference
 
+
 @pytest.fixture
 def inference():
-    return ChineseTaiwaneseASRInference("openai/whisper-small", device="cpu", use_faster_whisper=False, language="zh-TW")
+    return ChineseTaiwaneseASRInference("openai/whisper-small", 
+                                        device="cpu", 
+                                        use_faster_whisper=False, 
+                                        language="zh-TW")
+
 
 def test_transcribe_stream(inference):
     def dummy_audio_stream():

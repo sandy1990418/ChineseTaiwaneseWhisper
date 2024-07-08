@@ -2,9 +2,11 @@ import pytest
 import torch
 from src.models.whisper_model import load_whisper_model
 
+
 @pytest.fixture
 def model_and_processor():
     return load_whisper_model("openai/whisper-small")
+
 
 def test_model_output(model_and_processor):
     model, processor = model_and_processor

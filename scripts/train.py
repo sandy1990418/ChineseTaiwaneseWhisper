@@ -28,6 +28,7 @@ def main():
             }
         else:
             raise ValueError(f"Unsupported PEFT method: {model_args.peft_method}")
+        
     model, processor = load_whisper_model(
         model_args.model_name_or_path, 
         use_peft=model_args.use_peft,
@@ -39,23 +40,14 @@ def main():
                                             text_column=data_args.text_column,
                                             audio_column=data_args.audio_column,
                                             max_samples=data_args.max_train_samples,
-                                            dataset_config_name=data_args.dataset_config_name)
+                                            dataset_config_name=data_args.dataset_config_name,
+                                            use_timestamps=True)
     
     eval_dataset = ChineseTaiwaneseDataset(data_args.dataset_name, "validation", processor, 
                                            text_column=data_args.text_column,
                                            audio_column=data_args.audio_column,
                                            max_samples=data_args.max_eval_samples,
                                            dataset_config_name=data_args.dataset_config_name)
-
-    # datasets = create_dataset(
-    #     dataset_name=data_args.dataset_name,
-    #     processor=processor,
-    #     text_column=data_args.text_column,
-    #     audio_column=data_args.audio_column,
-    #     max_train_samples=data_args.max_train_samples,
-    #     max_eval_samples=data_args.max_eval_samples,
-    #     youtube_dir=data_args.youtube_data_dir
-    # )
 
     data_collator = WhisperDataCollator(
         processor=processor,

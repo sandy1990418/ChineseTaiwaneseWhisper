@@ -11,9 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class ChineseTaiwaneseASRInference:
-    def __init__(self, model_path: str, device: str = "cuda", use_peft: bool = False, language: str = "chinese"):
+    def __init__(self, 
+                 model_path: str, 
+                 device: str = "cuda", 
+                 use_peft: bool = False, 
+                 language: str = "chinese",
+                 use_timestamps: bool = False):
         self.device = device
         self.language = language
+        self.use_timestamps = use_timestamps
 
         try:
             if use_peft:
@@ -29,6 +35,10 @@ class ChineseTaiwaneseASRInference:
             # Set the language token without using forced_decoder_ids
             self.language_token = self.processor.tokenizer.convert_tokens_to_ids(f"<|{language}|>")
             self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task="transcribe")
+
+            if self.use_timestamps:
+                self.processor.decode.decode_with_timestamps = True
+
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise
@@ -49,14 +59,26 @@ class ChineseTaiwaneseASRInference:
             attention_mask = torch.ones_like(input_features)
             attention_mask = attention_mask.to(self.device)
             
-            generated_ids = self.model.generate(
-                input_features,
-                attention_mask=attention_mask,
-                language=self.language,
-                task="transcribe"
-            )
+            if self.use_timestamps:
+                generated_ids = self.model.generate(
+                    input_features,
+                    attention_mask=attention_mask,
+                    language=self.language,
+                    task="transcribe",
+                    return_timestamps=True
+                )
+                transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+                # Process timestamps if needed
+                transcriptions = [self._process_timestamps(trans) for trans in transcriptions]
+            else:
+                generated_ids = self.model.generate(
+                    input_features,
+                    attention_mask=attention_mask,
+                    language=self.language,
+                    task="transcribe"
+                )
             
-            transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+                transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
             return transcriptions
         except Exception as e:
             logger.error(f"Error in transcribe_batch: {e}")
@@ -85,14 +107,23 @@ class ChineseTaiwaneseASRInference:
                                                 sampling_rate=sample_rate, 
                                                 return_tensors="pt").input_features
                 input_features = input_features.to(self.device)
-
-                # Generate transcription
-                generated_ids = self.model.generate(
-                    input_features, 
-                    forced_decoder_ids=self.forced_decoder_ids,
-                    language=self.language
-                )
-                transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                if self.use_timestamps:
+                    generated_ids = self.model.generate(
+                        input_features, 
+                        forced_decoder_ids=self.forced_decoder_ids,
+                        language=self.language,
+                        return_timestamps=True
+                    )
+                    transcription = self.processor.decode(generated_ids[0], skip_special_tokens=False)
+                    transcription = self._process_timestamps(transcription)
+                else:
+                    # Generate transcription
+                    generated_ids = self.model.generate(
+                        input_features, 
+                        forced_decoder_ids=self.forced_decoder_ids,
+                        language=self.language
+                    )
+                    transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
                 yield transcription.strip()
 
                 # Remove strided part from the beginning of the buffer
@@ -107,15 +138,25 @@ class ChineseTaiwaneseASRInference:
                                             sampling_rate=sample_rate, 
                                             return_tensors="pt").input_features
             input_features = input_features.to(self.device)
-            generated_ids = self.model.generate(
-                input_features, 
-                forced_decoder_ids=self.forced_decoder_ids,
-                language=self.language
-            )
-            transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            if self.use_timestamps:
+                generated_ids = self.model.generate(
+                    input_features, 
+                    forced_decoder_ids=self.forced_decoder_ids,
+                    language=self.language,
+                    return_timestamps=True
+                )
+                transcription = self.processor.decode(generated_ids[0], skip_special_tokens=False)
+                transcription = self._process_timestamps(transcription)
+            else:
+                generated_ids = self.model.generate(
+                    input_features, 
+                    forced_decoder_ids=self.forced_decoder_ids,
+                    language=self.language
+                )
+                transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             yield transcription.strip()
 
-    def _process_audio(self, audio, target_length: int = 16000):
+    def _process_audio(self, audio, target_length: int = 480000):
         """Process and pad or trim the audio array to target_length."""
         if isinstance(audio, np.ndarray):
             audio_array = audio
@@ -132,3 +173,9 @@ class ChineseTaiwaneseASRInference:
         if len(audio_array) < target_length:
             return np.pad(audio_array, (0, target_length - len(audio_array)), 'constant')
         return audio_array[:target_length]
+
+    def _process_timestamps(self, transcription: str) -> str:
+        """Process transcription with timestamps."""
+        # This is a placeholder. Implement according to your specific timestamp format.
+        # For example, you might want to convert Whisper's timestamp format to your preferred format.
+        return transcription

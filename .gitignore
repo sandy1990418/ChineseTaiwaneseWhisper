@@ -8,6 +8,6 @@ wheels/
 *.egg
 flagged/
 whisper-finetuned-zh-tw/
-whisper-peft-finetuned-zh-tw/
+whisper-peft-finetuned-zh-tw*/
 asr_transcription_streaming_cache/
 youtube_data/

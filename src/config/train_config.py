@@ -75,6 +75,10 @@ class DataArguments:
         default=30,
         metadata={"help": "Maximum input length in seconds for audio clips"}
     )
+    use_timestamps: bool = field(
+        default=False,
+        metadata={"help": "Use timestamp or not."}
+    )
 
 
 @dataclass
