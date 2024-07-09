@@ -217,7 +217,11 @@ class InferenceArguments:
         default="./output",
         metadata={"help": "Directory to save output files"}
     )
-
+    file_name: str = field(
+        default="translation_result.json",
+        metadata={"help": "Directory to save output files"}
+    )
+    
     def __post_init__(self):
         if self.device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"

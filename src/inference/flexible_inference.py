@@ -80,10 +80,9 @@ class ChineseTaiwaneseASRInference:
                     chunk_trans, cumulative_duration = self._process_timestamps(chunk_trans, 
                                                                                 cumulative_duration,
                                                                                 )
-
                 chunk_transcriptions.extend(chunk_trans)
 
-            full_transcription = " ".join(chunk_transcriptions)
+            full_transcription = "".join(chunk_transcriptions)
             transcriptions.append(full_transcription)
             
             return transcriptions

@@ -1,85 +1,76 @@
 # Chinese/Taiwanese Whisper ASR Project
 
-This project implements an Automatic Speech Recognition (ASR) system for Chinese (Traditional) and Taiwanese using the Whisper model. It supports both full fine-tuning and PEFT (Parameter-Efficient Fine-Tuning) methods, as well as streaming inference.
+An advanced Automatic Speech Recognition (ASR) system for Chinese (Traditional) and Taiwanese, leveraging the power of OpenAI's Whisper model. This project supports full fine-tuning, Parameter-Efficient Fine-Tuning (PEFT), and streaming inference, optimized for T4 GPUs.
 
-## Features
+## 🌟 Features
 
-- Fine-tuning of Whisper models on Chinese/Taiwanese data
-- Support for PEFT methods (e.g., LoRA) for efficient fine-tuning
-- Batch and streaming inference
-- Gradio web interface for easy interaction with the model
-- Optimized for T4 GPUs
+- 🎙️ Fine-tuning of Whisper models on Chinese/Taiwanese data
+- 🚀 PEFT methods support (e.g., LoRA) for efficient fine-tuning
+- 🔄 Batch and streaming inference capabilities
+- 🖥️ User-friendly Gradio web interface
+- ⚡ Optimized performance on T4 GPUs
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-chinese_taiwanese_whisper_asr/
-│
+ChineseTaiwaneseWhisper/
+├── scripts/
+│   ├── gradio_interface.py
+│   ├── infer.py
+│   └── train.py
 ├── src/
 │   ├── config/
-│   │   └── train_config.py
+│   ├── crawler/
 │   ├── data/
-│   │   ├── dataset.py
-│   │   └── data_collator.py
 │   ├── models/
-│   │   └── whisper_model.py
 │   ├── trainers/
-│   │   └── whisper_trainer.py
 │   └── inference/
-│       └── flexible_inference.py
-├── scripts/
-│   ├── train.py
-│   └── gradio_interface.py
 ├── tests/
-│   ├── test_dataset.py
-│   ├── test_model.py
-│   └── test_inference.py
 ├── requirements.txt
 ├── setup.py
 └── README.md
 ```
 
-## Installation
+## 🛠️ Installation
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/sandy1990418/ChineseTaiwaneseWhisper.git
    cd ChineseTaiwaneseWhisper
    ```
 
-2. Create a virtual environment and activate it:
-   ```
+2. Set up a virtual environment:
+   ```bash
    python -m venv venv
-   source venv/bin/activate 
+   source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
    ```
 
-3. Install the required packages:
-   ```
+3. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
 
-## Usage
+## 🚀 Usage
 
 ### Training
 
-To train the model, run:
-
-```
+#### Standard Fine-tuning
+```bash
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
                         --dataset_config_name "zh-TW" \
                         --youtube_data_dir "./youtube_data" \
-                        --output_dir "./whisper-peft-finetuned-zh-tw" \
+                        --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
                         --learning_rate 3e-5 \
-                        --fp16
+                        --fp16 \
+                        --use_timestamps False
 ```
 
-For PEFT fine-tuning (e.g., using LoRA), add the `--use_peft` flag:
-
-```
+#### PEFT Fine-tuning (e.g., LoRA)
+```bash
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --use_peft \
@@ -91,26 +82,63 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
                         --learning_rate 3e-5 \
-                        --fp16
+                        --fp16 \
+                        --use_timestamps False
 ```
+
+#### Training Arguments
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--model_name_or_path` | Path or name of the pre-trained model | Required |
+| `--language` | Language for fine-tuning (e.g., "chinese", "taiwanese") | Required |
+| `--dataset_name` | Name of the dataset to use | Required |
+| `--dataset_config_name` | Configuration name for the dataset | Required |
+| `--youtube_data_dir` | Directory containing YouTube data | Optional |
+| `--output_dir` | Directory to save the fine-tuned model | Required |
+| `--num_train_epochs` | Number of training epochs | 3 |
+| `--per_device_train_batch_size` | Batch size per GPU/CPU for training | 16 |
+| `--learning_rate` | Initial learning rate | 3e-5 |
+| `--fp16` | Use mixed precision training | False |
+| `--use_timestamps` | Include timestamp information in training | False |
+| `--use_peft` | Use Parameter-Efficient Fine-Tuning | False |
+| `--peft_method` | PEFT method to use (e.g., "lora") | None |
 
 ### Inference
 
-To run the Gradio interface for interactive inference:
-
-```
+#### Gradio Interface
+Launch the interactive web interface:
+```bash
 python scripts/gradio_interface.py
 ```
+Access the interface at `http://127.0.0.1:7860` (default URL).
 
-This will start a web server, and you'll see a URL in the console (usually `http://127.0.0.1:7860`). Open this URL in your web browser to access the Gradio interface.
+> **Note**: For streaming mode, use Chrome instead of Safari to avoid CPU memory issues.
 
-**Note** : To use streaming mode, please open the Gradio link in Chrome instead of Safari to avoid running out of CPU memory.
+#### Batch Inference
+```bash
+python scripts/infer.py --model_path openai/whisper-small \
+                        --audio_files audio.wav \
+                        --mode batch \
+                        --use_timestamps False
+```
 
+#### Inference Arguments
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--model_path` | Path to the fine-tuned model | Required |
+| `--audio_files` | Path(s) to audio file(s) for transcription | Required |
+| `--mode` | Inference mode ("batch" or "stream") | "batch" |
+| `--use_timestamps` | Include timestamps in transcription | False |
+| `--device` | Device to use for inference (e.g., "cuda", "cpu") | "cuda" if available, else "cpu" |
+| `--output_dir` | Directory to save transcription results | "output" |
+| `--use_peft` | Use PEFT model for inference | False |
+| `--language` | Language of the audio (e.g., "chinese", "taiwanese") | "chinese" |
 
 ### Audio Crawler
 
-Run the YouTube crawler using the following command:
-
+Collect YouTube data:
 ```bash
 python src/crawler/youtube_crawler.py \
        --playlist_urls "YOUTUBE_PLAYLIST_URL" \
@@ -118,61 +146,76 @@ python src/crawler/youtube_crawler.py \
        --dataset_name youtube_asr_dataset \
        --file_prefix language_prefix
 ```
-Arguments
 
-- playlist_urls: One or more YouTube playlist URLs to crawl (required)
-- output_dir: Directory to save audio files and dataset (default: "./output")
-- dataset_name: Name of the output dataset file (default: "youtube_dataset")
-- file_prefix: Prefix for audio and subtitle files (default: "youtube")
+#### Crawler Arguments
 
-<br>
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--playlist_urls` | YouTube playlist URL(s) to crawl | Required |
+| `--output_dir` | Directory to save audio files and dataset | "./output" |
+| `--dataset_name` | Name of the output dataset file | "youtube_dataset" |
+| `--file_prefix` | Prefix for audio and subtitle files | "youtube" |
 
-## Customization
+## 🔧 Customization
 
-- To use a different dataset, modify the `dataset_name` parameter in the training script.
-- To change the PEFT method, adjust the `peft_method` parameter and corresponding configurations in `src/config/train_config.py`.
-- For inference optimizations, you can modify the `ChineseTaiwaneseASRInference` class in `src/inference/flexible_inference.py`.
+- 📊 Use different datasets by modifying the `dataset_name` parameter
+- 🛠️ Adjust PEFT methods via `peft_method` and configurations in `src/config/train_config.py`
+- 🔬 Optimize inference by modifying `ChineseTaiwaneseASRInference` in `src/inference/flexible_inference.py`
 
-## Testing
 
-This project uses pytest for testing. To run the tests:
+## 🧪 Testing
 
-1. Ensure you have pytest installed:
-   ```
-   pip install pytest
-   ```
-
-2. Run the tests:
-   ```
-   pytest tests/
-   ```
-
-This will discover and run all the tests in the `tests/` directory.
-
-To run tests with more detailed output, use:
+Run tests with pytest:
+```bash
+pytest tests/
 ```
+
+For detailed output:
+```bash
 pytest -v tests/
 ```
 
-For test coverage information, install pytest-cov and run:
-```
+Check test coverage:
+```bash
 pip install pytest-cov
 pytest --cov=src tests/
 ```
 
-This will show you the test coverage for the `src/` directory.
+## 💻 Performance Optimization
 
+### Baseline Performance
 
-## Performance Optimization
+On a T4 GPU, without any acceleration methods:
+- Inference speed: 1:24 (1 minute of processing time can transcribe 24 minutes of audio)
 
-If you encounter memory issues on your T4 GPU, try the following:
+This baseline gives you an idea of the default performance. Depending on your specific needs, you may want to optimize further or use acceleration techniques.
 
-1. Reduce the batch size (`--per_device_train_batch_size`)
-2. Use a smaller Whisper model (e.g., "openai/whisper-tiny")
-3. Increase gradient accumulation steps (`--gradient_accumulation_steps`)
-4. Enable mixed precision training (`--fp16`)
+### Optimization Techniques
 
-<br>
+To address memory issues or improve performance on T4 GPUs:
+
+1. 📉 Reduce batch size (`--per_device_train_batch_size`)
+   - Decreases memory usage but may increase processing time
+2. 🔽 Use a smaller Whisper model (e.g., "openai/whisper-tiny")
+   - Faster inference but potentially lower accuracy
+3. 📈 Increase gradient accumulation steps (`--gradient_accumulation_steps`)
+   - Simulates larger batch sizes without increasing memory usage
+4. 🔀 Enable mixed precision training (`--fp16`)
+   - Speeds up computation and reduces memory usage with minimal impact on accuracy
+
+### Advanced Optimization
+
+For further performance improvements:
+
+5. 🚀 Use PEFT methods like LoRA
+   - Significantly reduces memory usage and training time
+6. ⚡ Implement quantization (e.g., int8)
+   - Dramatically reduces model size and increases inference speed
+7. 🖥️ Utilize multi-GPU setups if available
+   - Distributes computation for faster processing
+
+> Note: The actual performance may vary depending on your specific hardware, audio complexity, and chosen optimization techniques. Always benchmark your specific use case.
+## 🔄 Streaming ASR Flow
 
 ```mermaid
 graph TD
@@ -190,16 +233,85 @@ graph TD
     K --> E
     E --> |No| L[Finalize Transcription]
     L --> M[End]
+```
+<br>
+
+## 📊 Dataset Format
+
+The Chinese/Taiwanese Whisper ASR project uses a specific format for its datasets to ensure compatibility with the training and inference scripts. The format can include or exclude timestamps, depending on the configuration.
+
+### Basic Structure
+
+Each item in the dataset represents an audio file and its corresponding transcription:
+
+```python
+{
+    "audio": {
+        "path": "path/to/audio/file.wav",
+        "sampling_rate": 16000
+    },
+    "sentence": "The transcription of the audio in Chinese or Taiwanese.",
+    "language": "zh-TW",  # or "zh-CN" for Mandarin, "nan" for Taiwanese, etc.
+    "duration": 10.5  # Duration of the audio in seconds
+}
+```
+
+### Transcription Format Examples
+
+#### Without Timestamps
 
 ```
+labels:
+<|startoftranscript|><|zh|><|transcribe|><|notimestamps|>地圖炮<|endoftext|>
+```
+
+In this example:
+- `<|startoftranscript|>`: Marks the beginning of the transcription
+- `<|zh|>`: Indicates the language (Chinese)
+- `<|transcribe|>`: Denotes that this is a transcription task
+- `<|notimestamps|>`: Indicates that no timestamps are included
+- `地圖炮`: The actual transcription
+- `<|endoftext|>`: Marks the end of the transcription
+
+#### With Timestamps
+
+```
+labels:
+<|startoftranscript|><|zh|><|transcribe|><|0.00|>而對樓市成交抑制作用最大的限購<|6.00|><|endoftext|>
+```
+
+In this example:
+- `<|startoftranscript|>`, `<|zh|>`, and `<|transcribe|>`: Same as above
+- `<|0.00|>`: Timestamp indicating the start of the transcription (0 seconds)
+- `而對樓市成交抑制作用最大的限購`: The actual transcription
+- `<|6.00|>`: Timestamp indicating the end of the transcription (6 seconds)
+- `<|endoftext|>`: Marks the end of the transcription
+
+### Notes
+
+- The choice between using timestamps or not should be consistent throughout your dataset and should match the `use_timestamps` parameter in your training and inference scripts.
+
+### Preparing Your Own Dataset
+
+If you're preparing your own dataset:
+
+1. Organize your audio files and transcriptions.
+2. Ensure each transcription includes the appropriate tokens (`<|startoftranscript|>`, `<|zh|>`, etc.).
+3. If using timestamps, include them in the format `<|seconds.decimals|>` before each segment of transcription.
+4. Use `<|notimestamps|>` if not including timestamp information.
+5. Always end the transcription with `<|endoftext|>`.
+
+By following this format, you ensure that your dataset is compatible with the Chinese/Taiwanese Whisper ASR system, allowing for efficient training and accurate inference.
 
 <br>
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+<br>
+
+## 🙏 Acknowledgments
 
 - OpenAI for the Whisper model
 - Hugging Face for the Transformers library

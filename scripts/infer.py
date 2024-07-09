@@ -76,7 +76,10 @@ def process_audio_file(inference, file_path: str) -> Dict:
     }
 
 
-def batch_inference(inference, audio_files: List[str], output_dir: str) -> None:
+def batch_inference(inference, 
+                    audio_files: List[str], 
+                    output_dir: str, 
+                    file_name: str) -> None:
     """
     Perform batch inference on a list of audio files and save results to a JSON file.
     
@@ -91,7 +94,7 @@ def batch_inference(inference, audio_files: List[str], output_dir: str) -> None:
         result = process_audio_file(inference, file)
         results.append(result)
     
-        output_file = os.path.join(output_dir, "transcription_results.json")
+        output_file = os.path.join(output_dir, file_name)
         try:
             with open(output_file, 'a+', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=4)
@@ -131,7 +134,8 @@ def main():
     if args.mode == "batch":
         batch_inference(inference, 
                         args.audio_files,
-                        args.output_dir)
+                        args.output_dir,
+                        args.file_name)
     else:
         for audio_file in args.audio_files:
             stream_inference(inference, audio_file)
