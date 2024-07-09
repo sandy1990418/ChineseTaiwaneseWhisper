@@ -3,8 +3,11 @@ import numpy as np
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from peft import PeftModel, PeftConfig
 import logging
-from typing import Generator
+from typing import Generator, List
 from collections import deque
+import re
+import tqdm
+import librosa
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,55 +33,59 @@ class ChineseTaiwaneseASRInference:
                 self.model = WhisperForConditionalGeneration.from_pretrained(model_path)
             
             self.model.to(device)
+            # BUG FIX: https://medium.com/@bofenghuang7/what-i-learned-from-whisper-fine-tuning-event-2a68dab1862
+            # included in the training
+            self.model.config.forced_decoder_ids = None
+            self.model.config.suppress_tokens = []
+            # to use gradient checkpointing
+            self.model.config.use_cache = False
+
             self.processor = WhisperProcessor.from_pretrained(model_path)
             
             # Set the language token without using forced_decoder_ids
             self.language_token = self.processor.tokenizer.convert_tokens_to_ids(f"<|{language}|>")
             self.forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task="transcribe")
 
-            if self.use_timestamps:
-                self.processor.decode.decode_with_timestamps = True
-
         except Exception as e:
             logger.error(f"Error loading model: {e}")
             raise
 
     @torch.no_grad()
-    def transcribe_batch(self, audio_batch):
+    def transcribe_batch(self, audio, sample_rate):
         try:
-            # Ensure minimum audio length and handle None inputs
-            audio_batch = [self._process_audio(audio) for audio in audio_batch if audio is not None]
-            
-            if not audio_batch:
-                return ["No valid audio input provided."]
-            
-            inputs = self.processor(audio_batch, return_tensors="pt", padding=True, sampling_rate=16000)
-            input_features = inputs.input_features.to(self.device)
-            
-            # Create attention mask
-            attention_mask = torch.ones_like(input_features)
-            attention_mask = attention_mask.to(self.device)
-            
-            if self.use_timestamps:
+            transcriptions = []
+            if audio is None:
+                transcriptions.append("No valid audio input provided.")
+            audio_chunks = self._process_audio(audio, sample_rate)
+            chunk_transcriptions = []
+            cumulative_duration = 0
+            for chunk in tqdm.tqdm(audio_chunks):
+                inputs = self.processor(chunk, 
+                                        return_tensors="pt", 
+                                        truncation=False, 
+                                        return_attention_mask=True, 
+                                        sampling_rate=16000)
+
+                input_features = inputs.input_features.to(self.device)
                 generated_ids = self.model.generate(
                     input_features,
-                    attention_mask=attention_mask,
                     language=self.language,
                     task="transcribe",
-                    return_timestamps=True
+                    return_timestamps=self.use_timestamps
                 )
-                transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
-                # Process timestamps if needed
-                transcriptions = [self._process_timestamps(trans) for trans in transcriptions]
-            else:
-                generated_ids = self.model.generate(
-                    input_features,
-                    attention_mask=attention_mask,
-                    language=self.language,
-                    task="transcribe"
-                )
+                chunk_trans = self.processor.batch_decode(generated_ids, 
+                                                          skip_special_tokens=True,
+                                                          decode_with_timestamps=self.use_timestamps)[0]
+                if self.use_timestamps:
+                    chunk_trans, cumulative_duration = self._process_timestamps(chunk_trans, 
+                                                                                cumulative_duration,
+                                                                                )
+
+                chunk_transcriptions.extend(chunk_trans)
+
+            full_transcription = " ".join(chunk_transcriptions)
+            transcriptions.append(full_transcription)
             
-                transcriptions = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
             return transcriptions
         except Exception as e:
             logger.error(f"Error in transcribe_batch: {e}")
@@ -156,26 +163,63 @@ class ChineseTaiwaneseASRInference:
                 transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             yield transcription.strip()
 
-    def _process_audio(self, audio, target_length: int = 480000):
-        """Process and pad or trim the audio array to target_length."""
+    # def _split_chunck(self, audio_array):
+
+    def _process_audio(self, 
+                       audio, 
+                       sample_rate: int = 16000,
+                       target_sample_rate: int = 16000,
+                       chunk_length: int = 480000) -> List[np.ndarray]:
+        """Process and pad or trim the audio array to chunk_length."""
+        """Split audio into chunks of 30 seconds (480000 samples at 16kHz)."""
         if isinstance(audio, np.ndarray):
             audio_array = audio
         elif isinstance(audio, tuple):
             audio_array = audio[1] if len(audio) > 1 else audio[0]
         else:
             raise ValueError(f"Unsupported audio input type: {type(audio)}")
-
-        audio_array = np.array(audio_array).flatten().astype(np.float32)
         
+        # Resample to 16kHz if necessary
+        if sample_rate != 16000:
+            audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=target_sample_rate)
+                
         # Normalize audio
-        audio_array = audio_array / np.max(np.abs(audio_array))
-        
-        if len(audio_array) < target_length:
-            return np.pad(audio_array, (0, target_length - len(audio_array)), 'constant')
-        return audio_array[:target_length]
+        audio_array = audio / np.max(np.abs(audio))
 
-    def _process_timestamps(self, transcription: str) -> str:
+        return [audio_array[i:i+chunk_length] for i in range(0, audio_array.shape[0], chunk_length)]
+
+    def _process_timestamps(self, transcription: str, offset: float = 0) -> str:
         """Process transcription with timestamps."""
-        # This is a placeholder. Implement according to your specific timestamp format.
-        # For example, you might want to convert Whisper's timestamp format to your preferred format.
-        return transcription
+        # Regular expression to match timestamp tokens
+        pattern = r'<\|(\d+\.\d+)\|>'
+        
+        # Split the transcription into segments based on timestamp tokens
+        segments = re.split(pattern, transcription)
+        segments = list(filter(None, segments))
+        
+        # Process segments and timestamps
+        formatted_transcription = []
+
+        for i in range(0, len(segments) - 2, 3):
+            timestamp_start = float(segments[i]) + offset
+            text = segments[i + 1].strip()
+            try:
+                timestamp_end = float(segments[i+2]) + offset
+            except ValueError:
+                timestamp_end = offset+30
+
+            if text:  # Only add non-empty segments
+                text = self.remove_duplicates(text)
+                formatted_transcription.extend([f"[{timestamp_start:.2f}]-[{timestamp_end:.2f}]{text}"])
+            offset = timestamp_end
+        return formatted_transcription, offset
+
+    def remove_duplicates(self, input_str):
+        # Split the input string into individual phrases
+        phrases = input_str.split(',')
+        
+        # Remove duplicates while maintaining order
+        unique_phrases = list(dict.fromkeys(phrases))
+        
+        # Join the unique phrases back into a single string
+        return ','.join(unique_phrases)
