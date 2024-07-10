@@ -8,7 +8,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # OpenAI KPI
-api_key = ""
+with open('api_key/key.txt', 'r') as f: 
+    api_key = f.read()
 
 
 def read_transcript_json(file_path: str) -> List[Dict]:
@@ -76,6 +77,8 @@ def process_transcript_file(file_path: str) -> str:
     transcript_data = read_transcript_json(file_path)
     transcript_text = extract_text_from_transcript(transcript_data)
     return summarize_transcript(transcript_text)
+
+# TODO: put summary to gradio_interface
 
 
 def main():

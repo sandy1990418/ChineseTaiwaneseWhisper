@@ -227,3 +227,19 @@ class InferenceArguments:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         os.makedirs(self.output_dir, exist_ok=True)
+
+
+@dataclass
+class GradioArguments:
+    cache_dir: str = field(
+        default="asr_transcription_streaming_cache",
+        metadata={"help": "Path to store ASR result"}
+    )
+    cache_file_name: str = field(
+        default="asr_log.json",
+        metadata={"help": "File name to store ASR result"}
+    )
+    language: str = field(
+        default="chinese",
+        metadata={"help": "Language code for the model (e.g., zh-TW for Traditional Chinese)"}
+    )

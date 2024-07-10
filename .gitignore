@@ -12,3 +12,4 @@ whisper-peft-finetuned-zh-tw*
 asr_transcription_streaming_cache/
 youtube_data/
 output*
+api_key

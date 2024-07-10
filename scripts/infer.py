@@ -65,15 +65,25 @@ def process_audio_file(inference, file_path: str) -> Dict:
     if audio_result is None:
         return {"file_name": os.path.basename(file_path), "error": "Failed to load audio"}
     
-    left_channel, right_channel, sample_rate = audio_result
-    
-    return {
-        "file_name": os.path.basename(file_path),
-        "channels": [
-            transcribe_channel(inference, left_channel, sample_rate, "left"),
-            transcribe_channel(inference, right_channel, sample_rate, "right")
-        ]
-    }
+    if len(audio_result) == 3:
+        left_channel, right_channel, sample_rate = audio_result
+        
+        return {
+            "file_name": os.path.basename(file_path),
+            "channels": [
+                transcribe_channel(inference, left_channel, sample_rate, "left"),
+                transcribe_channel(inference, right_channel, sample_rate, "right")
+            ]
+        }
+    else:
+        channel, sample_rate = audio_result
+        
+        return {
+            "file_name": os.path.basename(file_path),
+            "channels": [
+                transcribe_channel(inference, channel, sample_rate, "single_channel"),
+            ]
+        }
 
 
 def batch_inference(inference, 
@@ -110,10 +120,9 @@ def stream_inference(inference, audio_file):
         for i in range(0, len(audio), chunk_size):
             yield audio[i:i+chunk_size]
 
-    print(f"Streaming transcription for file: {audio_file}")
+    logger.info(f"Streaming transcription for file: {audio_file}")
     for transcription in inference.transcribe_stream(audio_generator()):
-        print(f"Partial transcription: {transcription}")
-    print()
+        logger.info(f"Partial transcription: {transcription}")
 
 
 def parse_args():
