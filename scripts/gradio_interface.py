@@ -5,6 +5,7 @@ from src.inference.flexible_inference import ChineseTaiwaneseASRInference
 from scipy import signal
 import os 
 from datetime import datetime
+import json
 
 cache_dir = os.path.join(os.getcwd(), "asr_transcription_streaming_cache")
 os.makedirs(cache_dir, exist_ok=True)
@@ -35,10 +36,30 @@ class ASRProcessor:
 asr_processor = ASRProcessor()
 
 
-def log_to_file(message):
-    log_file = os.path.join(cache_dir, "asr_log.txt")
-    with open(log_file, "a") as f:
-        f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {message}\n")
+def log_to_json(message, log_type="info"):
+    log_file = os.path.join(cache_dir, "asr_log.json")
+    
+    log_entry = {
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "type": log_type,
+        "message": message
+    }
+    
+    if os.path.exists(log_file):
+        with open(log_file, "r+") as f:
+            try:
+                logs = json.load(f)
+            except json.JSONDecodeError:
+                logs = []
+            
+            logs.append(log_entry)
+            
+            f.seek(0)
+            json.dump(logs, f, ensure_ascii=False, indent=4)
+            f.truncate()
+    else:
+        with open(log_file, "w") as f:
+            json.dump([log_entry], f, ensure_ascii=False, indent=4)
 
 
 def convert_audio_sampling(audio):
@@ -83,7 +104,7 @@ def transcribe_stream(audio, model_choice, use_peft):
         chunk_transcription = next(asr_processor.model.transcribe_stream([chunk], sample_rate=sr))
         transcription += chunk_transcription + " "
 
-        log_to_file(chunk_transcription)
+        log_to_json(chunk_transcription)
         yield transcription.strip()
 
 
