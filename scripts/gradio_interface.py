@@ -11,6 +11,7 @@ from transformers import HfArgumentParser
 from src.config.train_config import GradioArguments
 from typing import Optional, Union, Any 
 import logging
+from summary import summarize_transcript, process_transcripts 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,6 +36,8 @@ class ASRProcessor:
             model_path = "./whisper-peft-finetuned-zh-tw"
         else:
             model_path = "openai/whisper-small"
+        
+        logger.info(f"Right now use model : {model_choice}")
 
         self.model = ChineseTaiwaneseASRInference(
             model_path, device=self.device, use_peft=use_peft, language=self.language
@@ -110,7 +113,7 @@ def transcribe_batch(
     audio: Any,
     asr_processor: object,
     cache_dir: Union[str],
-    cache_file_name: str
+    cache_batch_filename: str
 ) -> str:
     """
     Transcribe audio input using the provided ASR processor.
@@ -119,12 +122,12 @@ def transcribe_batch(
         audio: Audio input (file path, bytes, or None)
         asr_processor: ASR processor object
         cache_dir: Directory to store cache files
-        cache_file_name: Name of the cache file
+        cache_batch_filename: Name of the cache file
 
     Returns:
         str: Transcription result
     """
-    logger.info(f"Starting transcription for {cache_file_name}")
+    logger.info(f"Starting transcription for {cache_batch_filename}")
 
     if audio is None:
         logger.warning("No audio input provided.")
@@ -145,7 +148,7 @@ def transcribe_batch(
                 audio_result[-1], 
                 asr_processor, 
                 cache_dir, 
-                cache_file_name, 
+                cache_batch_filename, 
                 channels[idx]
             )
             transcriptions.append(f"{channels[idx]}:{channel_transcription}\n")
@@ -155,12 +158,12 @@ def transcribe_batch(
             audio_result[-1], 
             asr_processor, 
             cache_dir, 
-            cache_file_name
+            cache_batch_filename
         )
         transcriptions.append(mono_transcription)
 
     final_transcription = "\n".join(transcriptions)
-    logger.info(f"Transcription completed for {cache_file_name}")
+    logger.info(f"Transcription completed for {cache_batch_filename}")
     return final_transcription
 
 
@@ -169,7 +172,7 @@ def _process_channel(
     sample_rate: int, 
     asr_processor: object, 
     cache_dir: str, 
-    cache_file_name: str, 
+    cache_batch_filename: str, 
     channel: str = None
 ) -> str:
     """
@@ -180,7 +183,7 @@ def _process_channel(
         sample_rate: Sample rate of the audio
         asr_processor: ASR processor object
         cache_dir: Directory to store cache files
-        cache_file_name: Name of the cache file
+        cache_batch_filename: Name of the cache file
         channel: Channel name (optional, for stereo audio)
 
     Returns:
@@ -188,14 +191,14 @@ def _process_channel(
     """
     try:
         transcription = asr_processor.model.transcribe_batch(audio, sample_rate)[0]
-        log_to_json(transcription, cache_dir, cache_file_name, channel)
+        log_to_json(transcription, cache_dir, cache_batch_filename, channel)
         return transcription
     except Exception as e:
         logger.error(f"Error transcribing {'channel ' + channel if channel else 'audio'}: {str(e)}")
         return f"Error transcribing {'channel ' + channel if channel else 'audio'}: {str(e)}"
 
 
-def transcribe_stream(audio, asr_processor, cache_dir, cache_file_name):
+def transcribe_stream(audio, asr_processor, cache_dir, cache_streaming_filename):
     if audio is None:
         return "No audio input provided."
 
@@ -231,17 +234,18 @@ def transcribe_stream(audio, asr_processor, cache_dir, cache_file_name):
             total_time += processing_time
             total_audio_length += chunk_duration
 
-            log_to_json(chunk_transcription.strip(), cache_dir, cache_file_name)
+            log_to_json(chunk_transcription.strip(), cache_dir, cache_streaming_filename)
 
             yield f"{transcription.strip()}"
         else:
-            log_to_json({"transcription": ""}, cache_dir, cache_file_name)
+            log_to_json({"transcription": ""}, cache_dir, cache_streaming_filename)
 
 
 def create_interface(args):
     asr_processor = ASRProcessor(args.language)
 
     with gr.Blocks() as demo:
+        transcription_state = gr.State("")
         gr.Markdown("# Chinese/Taiwanese ASR Demo")
 
         with gr.Row():
@@ -265,32 +269,44 @@ def create_interface(args):
                 stream_audio = gr.Audio(
                     sources="microphone",
                     type="numpy",
-                    label="Streaming Audio \
-                                        Input (Microphone only)",
+                    label="Streaming Audio Input (Microphone only)",
                     visible=False,
                     streaming=True,
                 )
                 output_text = gr.Textbox(label="Transcription Output")
+                summary_text = gr.Textbox(label="Summary", visible=True)
                 transcribe_button = gr.Button("Transcribe", visible=True)
                 clear_button = gr.Button("Clear", visible=True)
+                summarize_button = gr.Button("Summarize", visible=True)
 
         def transcribe(audio, model_choice, use_peft):
             return transcribe_batch(
-                audio, asr_processor, args.cache_dir, args.cache_file_name
+                audio, asr_processor, args.cache_dir, args.cache_batch_filename
             )
 
         def stream_transcribe(audio, model_choice, use_peft):
             for transcription in transcribe_stream(
-                audio, asr_processor, args.cache_dir, args.cache_file_name
+                audio, asr_processor, args.cache_dir, args.cache_streaming_filename
             ):
                 yield transcription
 
+        def summarize_batch_audio(transcript: str, state: str) -> str:
+            summary = summarize_transcript(transcript)
+            return summary
+
+        def summarize_streaming_audio(args: Optional[Any] = args) -> str:
+            summary = process_transcripts(args, args.cache_streaming_filename)
+            return summary
+
         def clear_output():
-            return ""
+            return "", "", ""
 
         def update_model(model_choice, use_peft):
             asr_processor.reset_model()
             asr_processor.initialize_model(model_choice, use_peft)
+
+        def stop_streaming():
+            print("Streaming has stopped")
 
         transcribe_button.click(
             fn=transcribe,
@@ -303,8 +319,25 @@ def create_interface(args):
             inputs=[stream_audio, model_choice, use_peft],
             outputs=output_text,
         )
+        
+        stream_audio.stop_recording(
+            stop_streaming
+        ).then(
+            fn=summarize_streaming_audio,
+            inputs=[],
+            outputs=summary_text
+        )
 
-        clear_button.click(fn=clear_output, inputs=[], outputs=output_text)
+        clear_button.click(
+            fn=clear_output, 
+            inputs=[], 
+            outputs=[output_text, summary_text, transcription_state])
+
+        summarize_button.click(
+            fn=summarize_batch_audio,
+            inputs=[output_text, transcription_state],
+            outputs=[summary_text]
+        )
 
         for input_component in [model_choice, use_peft]:
             input_component.change(
@@ -318,6 +351,8 @@ def create_interface(args):
                     stream_audio: gr.update(visible=False),
                     transcribe_button: gr.update(visible=True),
                     clear_button: gr.update(visible=True),
+                    summarize_button: gr.update(visible=True),
+                    summary_text: gr.update(visible=True)
                 }
             else:  # Streaming
                 return {
@@ -325,12 +360,14 @@ def create_interface(args):
                     stream_audio: gr.update(visible=True),
                     transcribe_button: gr.update(visible=False),
                     clear_button: gr.update(visible=True),
+                    summarize_button: gr.update(visible=False),
+                    summary_text: gr.update(visible=True)
                 }
 
         mode.change(
             fn=update_interface,
             inputs=[mode],
-            outputs=[batch_audio, stream_audio, transcribe_button, clear_button],
+            outputs=[batch_audio, stream_audio, transcribe_button, clear_button, summarize_button, summary_text],
         )
 
     return demo
