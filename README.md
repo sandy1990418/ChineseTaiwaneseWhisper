@@ -216,23 +216,63 @@ For further performance improvements:
 
 > Note: The actual performance may vary depending on your specific hardware, audio complexity, and chosen optimization techniques. Always benchmark your specific use case.
 ## 🔄 Streaming ASR Flow
+#### Real-time Audio Simple Transcription Pipeline
+1. Set Up: We prepare our system to listen and transcribe.
+2. Listen: We constantly listen for incoming audio.
+3. Check: When we get audio, we check if it contains speech.
+4. Process:
+   - If there's speech, we transcribe it.
+   - If not, we skip that part.
+5. Share: We immediately share what we found, whether it's words or silence.
+6. Repeat: We keep doing this until there's no more audio.
+7. Finish: When the audio ends, we wrap everything up and provide the final transcript.
+
+```mermaid
+graph TD
+    A[Start] --> B[Set Up System]
+    B --> C{Listen for Audio}
+    C -->|Audio Received| D[Check for Speech]
+    D -->|Speech Found| E[Transcribe Audio]
+    D -->|No Speech| F[Skip Transcription]
+    E --> G[Output Result]
+    F --> G
+    G --> C
+    C -->|No More Audio| H[Finish Up]
+    H --> I[End]
+```
+
+#### Real-time Audio Transcription Pipeline
 
 ```mermaid
 graph TD
     A[Start] --> B[Initialize Audio Stream]
     B --> C[Initialize ASR Model]
-    C --> D[Initialize Audio Buffer]
-    D --> E{Receive Audio Chunk}
-    E --> |Yes| F[Add to Audio Buffer]
-    F --> G{Buffer Full?}
-    G --> |No| E
-    G --> |Yes| H[Process Audio Buffer]
-    H --> I[Generate Partial Transcription]
-    I --> J[Output Partial Transcription]
-    J --> K[Slide Buffer]
-    K --> E
-    E --> |No| L[Finalize Transcription]
-    L --> M[End]
+    C --> D[Initialize VAD Model]
+    D --> E[Initialize Audio Buffer]
+    E --> F[Initialize ThreadPoolExecutor]
+    F --> G{Receive Audio Chunk}
+    G -->|Yes| H[Add to Audio Buffer]
+    H --> I{Buffer Full?}
+    I -->|No| G
+    I -->|Yes| J[Submit Chunk to ThreadPool]
+    J --> K[Apply VAD]
+    K --> L{Speech Detected?}
+    L -->|No| O[Slide Buffer]
+    L -->|Yes| M[Process Audio Chunk]
+    M --> N[Generate Partial Transcription]
+    N --> O
+    O --> G
+    G -->|No| P[Process Remaining Audio]
+    P --> Q[Finalize Transcription]
+    Q --> R[End]
+
+    subgraph "Parallel Processing"
+    J
+    K
+    L
+    M
+    N
+    end
 ```
 <br>
 
