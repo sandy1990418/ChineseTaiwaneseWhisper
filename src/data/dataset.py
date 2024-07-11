@@ -1,6 +1,6 @@
-from typing import Optional  # , List, Tuple
-from torch.utils.data import Dataset
-from datasets import load_dataset
+from typing import Optional, List, Union, Any
+from torch.utils.data import Dataset, ConcatDataset
+from datasets import load_dataset, load_from_disk
 from transformers import WhisperProcessor
 import librosa
 import logging
@@ -16,21 +16,42 @@ logger = logging.getLogger(__name__)
 
 class ChineseTaiwaneseDataset(Dataset):
     def __init__(self, 
-                 dataset_name: str,
+                 dataset_names: Union[str, List[str]],
                  split: str,
                  processor: WhisperProcessor,
                  text_column: str = "sentence",
                  audio_column: str = "audio",
                  max_samples: Optional[int] = None,
-                 dataset_config_name: str = "zh-TW",
-                 use_timestamps: bool = False):
-        self.dataset = load_dataset(dataset_name, dataset_config_name, split=split)
+                 dataset_config_names: Optional[Union[str, List[Any]]] = None,
+                 use_timestamps: bool = False,
+                 *args,
+                 **kwargs):
+        if isinstance(dataset_names, str):
+            dataset_names = [dataset_names]
+        if dataset_config_names is None:
+            dataset_config_names = [None] * len(dataset_names)
+        elif isinstance(dataset_config_names, str):
+            dataset_config_names = [dataset_config_names]
+        # Ensure dataset_config_names is at least as long as dataset_names
+        if len(dataset_config_names) < len(dataset_names):
+            dataset_config_names.extend([None] * (len(dataset_names) - len(dataset_config_names)))
+        
+        datasets = []
+
+        for dataset_name, config_name in zip(dataset_names, dataset_config_names):
+            try:
+                dataset = load_dataset(dataset_name, config_name, split=split)
+            except ValueError:
+                dataset = load_from_disk(dataset_name)
+            datasets.append(dataset)
+        
+        self.dataset = ConcatDataset(datasets)
         if max_samples is not None:
-            self.dataset = self.dataset.select(range(min(max_samples, len(self.dataset))))
+            self.dataset = [self.dataset[i] for i in range(min(max_samples, len(self.dataset)))]
+        
         self.processor = processor
         self.text_column = text_column
         self.audio_column = audio_column
-        self.dataset_config_name = dataset_config_name
         self.use_timestamps = use_timestamps
 
         if use_timestamps:
@@ -43,8 +64,15 @@ class ChineseTaiwaneseDataset(Dataset):
         item = self.dataset[idx]
         
         try:
-            audio = item[self.audio_column]["array"]
-            sampling_rate = item[self.audio_column]["sampling_rate"]
+            # Handle both Common Voice and YouTube data formats
+            if isinstance(item[self.audio_column], dict) and 'array' in item[self.audio_column]:
+                # Common Voice format
+                audio = item[self.audio_column]['array']
+                sampling_rate = item[self.audio_column]['sampling_rate']
+            else:
+                # YouTube data format
+                audio_path = item[self.audio_column]
+                audio, sampling_rate = librosa.load(audio_path, sr=None)
             
             # Resample audio to 16kHz if necessary
             if sampling_rate != 16000:
@@ -64,7 +92,6 @@ class ChineseTaiwaneseDataset(Dataset):
                 text = str(text)
 
             # Tokenize text
-            # self.processor.decode(labels[0], decode_with_timestamps=True)
             labels = self.processor.tokenizer(text, return_tensors="pt").input_ids
 
             return {

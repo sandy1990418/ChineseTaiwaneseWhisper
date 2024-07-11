@@ -114,7 +114,7 @@ def create_dataset(audio_files, subtitle_files, output_file):
         with open(subtitle_file, 'r', encoding='utf-8') as f:
             subtitle = json.load(f)
         text = ' '.join([entry['text'] for entry in subtitle])
-        data.append({'audio': audio_file, 'sentence': text})
+        data.append({'audio': f"{audio_file}.wav", 'sentence': text})
 
     df = pd.DataFrame(data)
     dataset = Dataset.from_pandas(df)

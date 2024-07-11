@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from transformers import Seq2SeqTrainingArguments
 import torch
 import os
@@ -39,12 +39,20 @@ class ModelArguments:
 
 @dataclass
 class DataArguments:
-    dataset_name: str = field(
+    dataset_name: Union[str, List[str]] = field(
+        default_factory=lambda: ["mozilla-foundation/common_voice_11_0"],
+        metadata={"help": "The name of the dataset to use (via the datasets library)"}
+    )
+    dataset_config_names: Union[str, List[Any]] = field(
+        default_factory=lambda: ["zh-TW"],
+        metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
+    )
+    eval_dataset_name: str = field(
         default="mozilla-foundation/common_voice_11_0",
         metadata={"help": "The name of the dataset to use (via the datasets library)"}
     )
-    dataset_config_name: Optional[str] = field(
-        default="zh-TW", 
+    eval_dataset_config_names: str = field(
+        default="zh-TW",
         metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
     )
     text_column: str = field(
@@ -155,7 +163,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
 class CrawlerArgs:
     # List of YouTube playlist URLs to crawl
     playlist_urls: List[str] = field(
-        default_factory=list,
+        default_factory=lambda: [],
         metadata={"help": "YouTube playlist URLs to crawl"}
     )
 

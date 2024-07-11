@@ -15,7 +15,6 @@ def main():
         model_args, data_args, training_args = parser.parse_json_file(json_file=sys.argv[1])
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-
     # Configure LoRA if specified
     peft_config = None
     if model_args.use_peft:
@@ -35,19 +34,23 @@ def main():
         peft_config=peft_config,
         language=model_args.language
     )
-
-    train_dataset = ChineseTaiwaneseDataset(data_args.dataset_name, "train", processor, 
+    train_dataset = ChineseTaiwaneseDataset(dataset_names=data_args.dataset_name, 
+                                            split="train", 
+                                            processor=processor, 
                                             text_column=data_args.text_column,
                                             audio_column=data_args.audio_column,
                                             max_samples=data_args.max_train_samples,
-                                            dataset_config_name=data_args.dataset_config_name,
-                                            use_timestamps=True)
+                                            dataset_config_names=data_args.dataset_config_names,
+                                            use_timestamps=data_args.use_timestamps)
     
-    eval_dataset = ChineseTaiwaneseDataset(data_args.dataset_name, "validation", processor, 
+    eval_dataset = ChineseTaiwaneseDataset(dataset_names=data_args.eval_dataset_name, 
+                                           split="validation", 
+                                           processor=processor, 
                                            text_column=data_args.text_column,
                                            audio_column=data_args.audio_column,
-                                           max_samples=data_args.max_eval_samples,
-                                           dataset_config_name=data_args.dataset_config_name)
+                                           max_samples=data_args.max_train_samples,
+                                           dataset_config_names=data_args.eval_dataset_config_names,
+                                           use_timestamps=data_args.use_timestamps)
 
     data_collator = WhisperDataCollator(
         processor=processor,
