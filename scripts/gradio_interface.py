@@ -6,7 +6,7 @@ from scipy import signal
 import os
 from datetime import datetime
 import json
-import time
+# import time
 from transformers import HfArgumentParser
 from src.config.train_config import GradioArguments
 from typing import Optional, Union, Any 
@@ -199,46 +199,40 @@ def _process_channel(
 
 
 def transcribe_stream(audio, asr_processor, cache_dir, cache_streaming_filename):
-    if audio is None:
-        return "No audio input provided."
-
     y, sr = convert_audio_sampling(audio)
 
     chunk_size = int(sr * 5)  # 5 second chunks
     transcription = ""
-    total_time = 0
-    total_audio_length = 0
 
     for i in range(0, len(y), chunk_size):
         chunk = y[i: i + chunk_size]
 
-        start_time = time.time()
+        try:
+            chunk_result = next(
+                asr_processor.model.transcribe_stream([chunk], sample_rate=sr)
+            )
 
-        chunk_result = next(
-            asr_processor.model.transcribe_stream([chunk], sample_rate=sr)
-        )
+            if isinstance(chunk_result, dict):
+                chunk_transcription = chunk_result.get("transcription", "")
+            else:
+                chunk_transcription = chunk_result
 
-        if isinstance(chunk_result, dict):
-            chunk_transcription = chunk_result.get("transcription", "")
-        else:
-            chunk_transcription = chunk_result  # Fallback to old behavior if not a dict
+            if chunk_transcription.strip():
+                transcription += chunk_transcription + " "
+                log_to_json(chunk_transcription.strip(), cache_dir, cache_streaming_filename)
+                yield transcription.strip()
+            else:
+                log_to_json({"transcription": ""}, cache_dir, cache_streaming_filename)
 
-        end_time = time.time()
-        processing_time = end_time - start_time
+        except StopIteration:
+            logger.info("Transcription of chunk completed.")
+            break
+        except Exception as e:
+            logger.error(f"Error processing chunk: {str(e)}")
+            yield f"Error processing chunk: {str(e)}"
 
-        if chunk_transcription.strip():  # Only process non-empty transcriptions
-            transcription += chunk_transcription + " "
-
-            chunk_duration = len(chunk) / sr
-
-            total_time += processing_time
-            total_audio_length += chunk_duration
-
-            log_to_json(chunk_transcription.strip(), cache_dir, cache_streaming_filename)
-
-            yield f"{transcription.strip()}"
-        else:
-            log_to_json({"transcription": ""}, cache_dir, cache_streaming_filename)
+    if not transcription.strip():
+        yield "No speech detected or transcription generated." 
 
 
 def create_interface(args):
@@ -285,10 +279,30 @@ def create_interface(args):
             )
 
         def stream_transcribe(audio, model_choice, use_peft):
-            for transcription in transcribe_stream(
-                audio, asr_processor, args.cache_dir, args.cache_streaming_filename
-            ):
-                yield transcription
+            if audio is None:
+                yield "No audio input provided."
+                return
+
+            try:
+                transcription_generator = transcribe_stream(
+                    audio, asr_processor, args.cache_dir, args.cache_streaming_filename
+                )
+                
+                while True:
+                    try:
+                        transcription = next(transcription_generator)
+                        yield transcription
+                    except StopIteration:
+                        logger.info("Transcription completed.")
+                        break
+                    except Exception as e:
+                        logger.error(f"Error during transcription: {str(e)}")
+                        yield f"An error occurred during transcription: {str(e)}"
+                        break
+
+            except Exception as e:
+                logger.error(f"Error in stream_transcribe: {str(e)}")
+                yield f"An error occurred: {str(e)}"
 
         def summarize_batch_audio(transcript: str, state: str) -> str:
             summary = summarize_transcript(transcript)

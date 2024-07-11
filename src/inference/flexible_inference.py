@@ -9,6 +9,8 @@ import re
 import tqdm
 import librosa
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,10 +22,18 @@ class ChineseTaiwaneseASRInference:
                  device: str = "cuda", 
                  use_peft: bool = False, 
                  language: str = "chinese",
-                 use_timestamps: bool = False):
+                 use_timestamps: bool = False, 
+                 *args, 
+                 **kwargs):
+
         self.device = device
         self.language = language
         self.use_timestamps = use_timestamps
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.vad_model, utils = torch.hub.load(repo_or_dir='snakers4/silero-vad',
+                                               model='silero_vad',
+                                               force_reload=True)
+        self.get_speech_timestamps, _, read_audio, _, _ = utils
 
         try:
             if use_peft:
@@ -91,140 +101,6 @@ class ChineseTaiwaneseASRInference:
             logger.error(f"Error in transcribe_batch: {e}")
             return [f"Error in transcription: {str(e)}"]
 
-    # @torch.no_grad()
-    # def transcribe_stream(self, 
-    #                       audio_stream: Generator[np.ndarray, None, None], 
-    #                       sample_rate: int = 16000, 
-    #                       chunk_length_s: float = 30.0, 
-    #                       stride_length_s: float = 5.0) -> Generator[dict, None, None]:
-    #     chunk_length = int(chunk_length_s * sample_rate)
-    #     stride_length = int(stride_length_s * sample_rate)
-    #     audio_buffer = deque(maxlen=chunk_length)
-        
-    #     for chunk in audio_stream:
-    #         start_time = time.time()
-            
-    #         # Add new audio chunk to the buffer
-    #         audio_buffer.extend(chunk)
-            
-    #         # Process when buffer reaches chunk_length
-    #         if len(audio_buffer) >= chunk_length:
-    #             audio_chunk = np.array(audio_buffer)
-                
-    #             # Check if the audio chunk contains speech
-    #             if not self.audio_energy.is_speech_frame(audio_chunk, sample_rate):
-    #                 yield {"transcription": "", "speed": 0}
-    #                 continue
-
-    #             # Process audio chunk
-    #             # input_features = self.processor(audio_chunk, 
-    #             #                                 sampling_rate=sample_rate, 
-    #             #                                 return_tensors="pt").input_features
-    #             input_features = self.processor(audio_chunk, 
-    #                                             return_tensors="pt", 
-    #                                             truncation=False, 
-    #                                             return_attention_mask=True, 
-    #                                             sampling_rate=16000).input_features
-                
-    #             input_features = input_features.to(self.device)
-
-    #             generated_ids = self.model.generate(
-    #                 input_features,
-    #                 language=self.language,
-    #                 task="transcribe",
-    #                 return_timestamps=self.use_timestamps
-    #             )
-    #             transcription = self.processor.decode(generated_ids, 
-    #                                                   skip_special_tokens=True,
-    #                                                   decode_with_timestamps=self.use_timestamps)[0]
-
-    #             if self.use_timestamps:
-    #                 # generated_ids = self.model.generate(
-    #                 #     input_features, 
-    #                 #     forced_decoder_ids=self.forced_decoder_ids,
-    #                 #     language=self.language,
-    #                 #     return_timestamps=True
-    #                 # )
-    #                 # transcription = self.processor.decode(generated_ids[0], skip_special_tokens=False)
-    #                 transcription = self._process_timestamps(transcription)
-    #             # else:
-    #             #     # Generate transcription
-    #             #     generated_ids = self.model.generate(
-    #             #         input_features, 
-    #             #         forced_decoder_ids=self.forced_decoder_ids,
-    #             #         language=self.language
-    #             #     )
-    #             #     transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-                
-    #             end_time = time.time()
-    #             processing_time = end_time - start_time
-    #             speed = chunk_length_s / processing_time if processing_time > 0 else 0
-
-    #             yield {"transcription": transcription.strip(), "speed": speed}
-
-    #             # Remove strided part from the beginning of the buffer
-    #             for _ in range(stride_length):
-    #                 if audio_buffer:
-    #                     audio_buffer.popleft()
-
-    #     # Process any remaining audio in the buffer
-    #     if audio_buffer:
-    #         remaining_audio = np.array(audio_buffer)
-    #         if self.audio_energy.is_speech_frame(remaining_audio, sample_rate):
-    #             start_time = time.time()
-    #             input_features = self.processor(remaining_audio, 
-    #                                             sampling_rate=sample_rate, 
-    #                                             return_tensors="pt").input_features
-    #             input_features = input_features.to(self.device)
-
-    #             generated_ids = self.model.generate(
-    #                 input_features,
-    #                 language=self.language,
-    #                 task="transcribe",
-    #                 return_timestamps=self.use_timestamps
-    #             )
-    #             transcription = self.processor.decode(generated_ids, 
-    #                                                   skip_special_tokens=True,
-    #                                                   decode_with_timestamps=self.use_timestamps)[0]
-
-    #             if self.use_timestamps:
-    #                 # generated_ids = self.model.generate(
-    #                 #     input_features, 
-    #                 #     forced_decoder_ids=self.forced_decoder_ids,
-    #                 #     language=self.language,
-    #                 #     return_timestamps=True
-    #                 # )
-    #                 # transcription = self.processor.decode(generated_ids[0], skip_special_tokens=False)
-    #                 transcription = self._process_timestamps(transcription)
-
-    #             # if self.use_timestamps:
-    #             #     generated_ids = self.model.generate(
-    #             #         input_features, 
-    #             #         forced_decoder_ids=self.forced_decoder_ids,
-    #             #         language=self.language,
-    #             #         return_timestamps=True
-    #             #     )
-    #             #     transcription = self.processor.decode(generated_ids[0], skip_special_tokens=False)
-    #             #     transcription = self._process_timestamps(transcription)
-    #             # else:
-    #             #     generated_ids = self.model.generate(
-    #             #         input_features, 
-    #             #         forced_decoder_ids=self.forced_decoder_ids,
-    #             #         language=self.language
-    #             #     )
-    #             #     transcription = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-                
-    #             end_time = time.time()
-    #             processing_time = end_time - start_time
-    #             speed = len(remaining_audio) / sample_rate / processing_time if processing_time > 0 else 0
-
-    #             yield {"transcription": transcription.strip(), "speed": speed}
-
-    # def _split_chunck(self, audio_array):
-
-    def is_speech(self, audio_chunk):
-        return np.abs(audio_chunk).mean() > self.noise_threshold
-
     @torch.no_grad()
     def transcribe_stream(self, 
                           audio_stream: Generator[np.ndarray, None, None], 
@@ -234,95 +110,82 @@ class ChineseTaiwaneseASRInference:
         chunk_length = int(chunk_length_s * sample_rate)
         stride_length = int(stride_length_s * sample_rate)
         audio_buffer = deque(maxlen=chunk_length)
-        
+        futures = []
+
         for chunk in audio_stream:
-            start_time = time.time()
-            
-            # Add new audio chunk to the buffer
             audio_buffer.extend(chunk)
-            
-            # Process when buffer reaches chunk_length
+
             if len(audio_buffer) >= chunk_length:
                 audio_chunk = np.array(audio_buffer)
-                # Check if the audio chunk contains speech
-                if not self.is_speech(audio_chunk):
-                    yield {"transcription": "", "speed": 0}
-                    continue
-                
-                # Process audio chunk
-                input_features = self.processor(audio_chunk, 
-                                                sampling_rate=sample_rate, 
-                                                return_tensors="pt").input_features
-                input_features = input_features.to(self.device)
-                
-                generated_ids = self.model.generate(
-                    input_features, 
-                    forced_decoder_ids=self.forced_decoder_ids,
-                    language=self.language,
-                    return_timestamps=self.use_timestamps
-                )
-                
-                # Handle different possible shapes of generated_ids
-                if isinstance(generated_ids, torch.Tensor):
-                    if generated_ids.dim() == 2:
-                        generated_ids = generated_ids.squeeze(0)
-                    elif generated_ids.dim() > 2:
-                        generated_ids = generated_ids.view(-1)
-                elif isinstance(generated_ids, list):
-                    generated_ids = torch.tensor(generated_ids).view(-1)
-                
-                if self.use_timestamps:
-                    transcription = self.processor.decode(generated_ids, skip_special_tokens=False)
-                    transcription = self._process_timestamps(transcription)
-                else:
-                    transcription = self.processor.decode(generated_ids, skip_special_tokens=True)
-                
-                end_time = time.time()
-                processing_time = end_time - start_time
-                speed = chunk_length_s / processing_time if processing_time > 0 else 0
-
-                yield {"transcription": transcription.strip(), "speed": speed}
+                future = self.executor.submit(self.process_chunk, audio_chunk, sample_rate)
+                futures.append(future)
 
                 # Remove strided part from the beginning of the buffer
                 for _ in range(stride_length):
                     if audio_buffer:
                         audio_buffer.popleft()
 
+            # Process completed futures
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    yield result
+                futures.remove(future)
+
         # Process any remaining audio in the buffer
         if audio_buffer:
             remaining_audio = np.array(audio_buffer)
-            input_features = self.processor(remaining_audio, 
-                                            sampling_rate=sample_rate, 
-                                            return_tensors="pt").input_features
-            input_features = input_features.to(self.device)
-            
-            generated_ids = self.model.generate(
-                input_features, 
-                forced_decoder_ids=self.forced_decoder_ids,
-                language=self.language,
-                return_timestamps=self.use_timestamps
-            )
-            
-            # Handle different possible shapes of generated_ids
-            if isinstance(generated_ids, torch.Tensor):
-                if generated_ids.dim() == 2:
-                    generated_ids = generated_ids.squeeze(0)
-                elif generated_ids.dim() > 2:
-                    generated_ids = generated_ids.view(-1)
-            elif isinstance(generated_ids, list):
-                generated_ids = torch.tensor(generated_ids).view(-1)
-            
-            if self.use_timestamps:
-                transcription = self.processor.decode(generated_ids, skip_special_tokens=False)
-                transcription = self._process_timestamps(transcription)
-            else:
-                transcription = self.processor.decode(generated_ids, skip_special_tokens=True)
-            
-            end_time = time.time()
-            processing_time = end_time - start_time
-            speed = len(remaining_audio) / sample_rate / processing_time if processing_time > 0 else 0
+            result = self.process_chunk(remaining_audio, sample_rate)
+            if result:
+                yield result
 
-            yield {"transcription": transcription.strip(), "speed": speed}
+    def process_chunk(self, audio_chunk: np.ndarray, sample_rate: int) -> dict:
+        start_time = time.time()
+
+        # Check if the audio chunk contains speech
+        if not self.is_speech(audio_chunk, sample_rate):
+            return None
+
+        # Preprocess audio
+        audio_chunk = librosa.util.normalize(audio_chunk)
+        
+        # Process audio chunk
+        input_features = self.processor(audio_chunk, 
+                                        sampling_rate=sample_rate, 
+                                        return_tensors="pt").input_features
+        input_features = input_features.to(self.device)
+
+        generated_ids = self.model.generate(
+            input_features, 
+            forced_decoder_ids=self.forced_decoder_ids,
+            language=self.language,
+            return_timestamps=self.use_timestamps
+        )
+
+        if isinstance(generated_ids, torch.Tensor):
+            if generated_ids.dim() == 2:
+                generated_ids = generated_ids.squeeze(0)
+            elif generated_ids.dim() > 2:
+                generated_ids = generated_ids.view(-1)
+        elif isinstance(generated_ids, list):
+            generated_ids = torch.tensor(generated_ids).view(-1)
+
+        if self.use_timestamps:
+            transcription = self.processor.decode(generated_ids, skip_special_tokens=False)
+            transcription = self._process_timestamps(transcription)
+        else:
+            transcription = self.processor.decode(generated_ids, skip_special_tokens=True)
+
+        end_time = time.time()
+        processing_time = end_time - start_time
+        speed = len(audio_chunk) / sample_rate / processing_time if processing_time > 0 else 0
+
+        return {"transcription": transcription.strip(), "speed": speed}
+
+    def is_speech(self, audio_chunk: np.ndarray, sample_rate: int) -> bool:
+        audio_tensor = torch.FloatTensor(audio_chunk)
+        speech_timestamps = self.get_speech_timestamps(audio_tensor, self.vad_model, sampling_rate=sample_rate)
+        return len(speech_timestamps) > 0
 
     def _process_audio(self, 
                        audio, 
