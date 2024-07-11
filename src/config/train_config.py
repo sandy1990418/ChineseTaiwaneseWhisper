@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Union, Any
+from typing import Optional, List, Union
 from transformers import Seq2SeqTrainingArguments
 import torch
 import os
@@ -43,7 +43,7 @@ class DataArguments:
         default_factory=lambda: ["mozilla-foundation/common_voice_11_0"],
         metadata={"help": "The name of the dataset to use (via the datasets library)"}
     )
-    dataset_config_names: Union[str, List[Any]] = field(
+    dataset_config_names: Union[str, List[str]] = field(
         default_factory=lambda: ["zh-TW"],
         metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
     )
@@ -188,6 +188,11 @@ class CrawlerArgs:
     # Prefix for audio and subtitle files
     file_prefix: str = field(
         default="youtube",
+        metadata={"help": "Prefix for audio and subtitle files"}
+    )
+    # Prefix for audio and subtitle files
+    batch_size: int = field(
+        default=20,
         metadata={"help": "Prefix for audio and subtitle files"}
     )
 

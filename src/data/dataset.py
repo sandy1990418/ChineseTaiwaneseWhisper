@@ -153,8 +153,9 @@ class ChineseTaiwaneseDataset(Dataset):
             logger.debug(f"Problematic content: {content[max(0, e.pos-20):e.pos+20]}")
         except UnicodeDecodeError as e:
             logger.warning(f"Unicode decode error in {file_path}: {str(e)}")
-        except Exception as e:
-            logger.warning(f"Unexpected error reading JSON file {file_path}: {str(e)}")
+        except Exception:
+            pass
+            # logger.warning(f"Unexpected error reading JSON file {file_path}: {str(e)}")
         return None
 
     def _process_full_audio_timestamps(self, item):

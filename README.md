@@ -59,7 +59,7 @@ ChineseTaiwaneseWhisper/
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --dataset_config_name "zh-TW" \
+                        --dataset_config_names "zh-TW" \
                         --youtube_data_dir "./youtube_data" \
                         --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
@@ -76,7 +76,7 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --use_peft \
                         --peft_method "lora" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --dataset_config_name "zh-TW" \
+                        --dataset_config_names "zh-TW" \
                         --youtube_data_dir "./youtube_data" \
                         --output_dir "./whisper-peft-finetuned-zh-tw" \
                         --num_train_epochs 3 \
@@ -93,7 +93,7 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
 | `--model_name_or_path` | Path or name of the pre-trained model | Required |
 | `--language` | Language for fine-tuning (e.g., "chinese", "taiwanese") | Required |
 | `--dataset_name` | Name of the dataset to use | Required |
-| `--dataset_config_name` | Configuration name for the dataset | Required |
+| `--dataset_config_names` | Configuration name for the dataset | Required |
 | `--youtube_data_dir` | Directory containing YouTube data | Optional |
 | `--output_dir` | Directory to save the fine-tuned model | Required |
 | `--num_train_epochs` | Number of training epochs | 3 |
