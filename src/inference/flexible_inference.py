@@ -105,8 +105,8 @@ class ChineseTaiwaneseASRInference:
     def transcribe_stream(self, 
                           audio_stream: Generator[np.ndarray, None, None], 
                           sample_rate: int = 16000, 
-                          chunk_length_s: float = 30.0, 
-                          stride_length_s: float = 5.0) -> Generator[dict, None, None]:
+                          chunk_length_s: float = 10.0, 
+                          stride_length_s: float = 1) -> Generator[dict, None, None]:
         chunk_length = int(chunk_length_s * sample_rate)
         stride_length = int(stride_length_s * sample_rate)
         audio_buffer = deque(maxlen=chunk_length)
@@ -115,7 +115,7 @@ class ChineseTaiwaneseASRInference:
         for chunk in audio_stream:
             audio_buffer.extend(chunk)
 
-            if len(audio_buffer) >= chunk_length:
+            if audio_buffer:  # len(audio_buffer) >= chunk_length:
                 audio_chunk = np.array(audio_buffer)
                 future = self.executor.submit(self.process_chunk, audio_chunk, sample_rate)
                 futures.append(future)
@@ -170,12 +170,15 @@ class ChineseTaiwaneseASRInference:
         elif isinstance(generated_ids, list):
             generated_ids = torch.tensor(generated_ids).view(-1)
 
-        if self.use_timestamps:
-            transcription = self.processor.decode(generated_ids, skip_special_tokens=False)
+        if self.use_timestamps:  # self.processor.batch_decode(generated_ids, 
+            transcription = self.processor.decode(generated_ids, 
+                                                  skip_special_tokens=True,
+                                                  decode_with_timestamps=self.use_timestamps)
             transcription = self._process_timestamps(transcription)
         else:
-            transcription = self.processor.decode(generated_ids, skip_special_tokens=True)
-
+            transcription = self.processor.decode(generated_ids, 
+                                                  skip_special_tokens=True,
+                                                  decode_with_timestamps=self.use_timestamps)
         end_time = time.time()
         processing_time = end_time - start_time
         speed = len(audio_chunk) / sample_rate / processing_time if processing_time > 0 else 0

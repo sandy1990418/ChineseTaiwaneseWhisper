@@ -8,7 +8,7 @@ from datetime import datetime
 import json
 # import time
 from transformers import HfArgumentParser
-from src.config.train_config import GradioArguments
+from src.config import GradioArguments
 from typing import Optional, Union, Any 
 import logging
 from summary import summarize_transcript, process_transcripts 
@@ -35,7 +35,7 @@ class ASRProcessor:
         elif model_choice == "Custom (PEFT)":
             model_path = "./whisper-peft-finetuned-zh-tw"
         else:
-            model_path = "openai/whisper-small"
+            model_path = "openai/whisper-large-v2"
         
         logger.info(f"Right now use model : {model_choice}")
 

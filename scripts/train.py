@@ -1,6 +1,6 @@
 import sys
 from transformers import HfArgumentParser, Seq2SeqTrainingArguments
-from src.config.train_config import ModelArguments, DataArguments
+from src.config import ModelArguments, DataArguments, WhisperProcessorConfig
 from src.model.whisper_model import load_whisper_model
 from src.data.dataset import ChineseTaiwaneseDataset  # ChineseTaiwaneseDataset
 from src.data.data_collator import WhisperDataCollator
@@ -9,12 +9,12 @@ from src.trainers.whisper_trainer import get_trainer
 
 
 def main():
-    parser = HfArgumentParser((ModelArguments, DataArguments, Seq2SeqTrainingArguments))
+    parser = HfArgumentParser((ModelArguments, DataArguments, Seq2SeqTrainingArguments, WhisperProcessorConfig))
     
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        model_args, data_args, training_args = parser.parse_json_file(json_file=sys.argv[1])
+        model_args, data_args, training_args, procrssor_args = parser.parse_json_file(json_file=sys.argv[1])
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, procrssor_args = parser.parse_args_into_dataclasses()
     # Configure LoRA if specified
     peft_config = None
     if model_args.use_peft:
@@ -41,22 +41,23 @@ def main():
                                             audio_column=data_args.audio_column,
                                             max_samples=data_args.max_train_samples,
                                             dataset_config_names=data_args.dataset_config_names,
-                                            use_timestamps=data_args.use_timestamps)
+                                            use_timestamps=data_args.use_timestamps,
+                                            processor_config=procrssor_args)
     
     eval_dataset = ChineseTaiwaneseDataset(dataset_names=data_args.eval_dataset_name, 
-                                           split="validation", 
+                                           split="test", 
                                            processor=processor, 
                                            text_column=data_args.text_column,
                                            audio_column=data_args.audio_column,
                                            max_samples=data_args.max_train_samples,
                                            dataset_config_names=data_args.eval_dataset_config_names,
-                                           use_timestamps=data_args.use_timestamps)
+                                           use_timestamps=data_args.use_timestamps,
+                                           processor_config=procrssor_args)
 
     data_collator = WhisperDataCollator(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
-
     trainer = get_trainer(
         model=model,
         args=training_args,

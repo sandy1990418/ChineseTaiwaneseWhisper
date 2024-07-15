@@ -1,21 +1,20 @@
 import os
 import re
 import json
-import random
-import time
-from typing import List, Tuple
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
-import pandas as pd
-import argparse
+# import pandas as pd
 import subprocess
 import sys
 import logging
-from datasets import Dataset, concatenate_datasets
-from src.config.train_config import CrawlerArgs
-import requests
-from fake_useragent import UserAgent
-from tenacity import retry, stop_after_attempt, wait_exponential
+from datasets import Dataset, concatenate_datasets, IterableDataset
+from src.config import CrawlerArgs
+import librosa
+from transformers import HfArgumentParser
+import numpy as np 
+from collections import defaultdict
+import gc
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -49,34 +48,20 @@ def extract_playlist_id(url):
     return playlist_id_match.group(1) if playlist_id_match else None
 
 
-def get_random_proxy() -> str:
-    """Get a random proxy from a list of free proxies."""
-    response = requests.get("https://free-proxy-list.net/")
-    proxies = re.findall(r"<td>\d+\.\d+\.\d+\.\d+</td><td>\d+</td>", response.text)
-    return random.choice(proxies).split("<td>")[1].split("</td>")[0]
-
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def download_youtube_audio_and_subtitles(
-    video_id: str,
-    output_dir: str,
-    ffmpeg_path: str = None,
-    file_prefix: str = "",
-    file_index: int = 0,
-) -> Tuple[str, str]:
-    """Download YouTube audio and subtitles for a given video ID with retry logic."""
+    video_id, output_dir, ffmpeg_path=None, file_prefix="", play_idx=0, file_index=0
+):
+    """Download YouTube audio and subtitles for a given video ID."""
     audio_dir = os.path.join(output_dir, "audio")
     subtitle_dir = os.path.join(output_dir, "subtitles")
     os.makedirs(audio_dir, exist_ok=True)
     os.makedirs(subtitle_dir, exist_ok=True)
 
-    file_name = f"{file_prefix}_{file_index:04d}"
+    file_name = f"{file_prefix}_{play_idx:04d}_{file_index:04d}"
     audio_file = os.path.join(audio_dir, f"{file_name}")
     subtitle_file = os.path.join(subtitle_dir, f"{file_name}.json")
 
-    ua = UserAgent()
-    proxy = get_random_proxy()
-
+    # Download audio if it doesn't exist
     if not os.path.exists(audio_file):
         ydl_opts = {
             "format": "bestaudio/best",
@@ -88,10 +73,6 @@ def download_youtube_audio_and_subtitles(
                 }
             ],
             "outtmpl": audio_file,
-            "proxy": f"http://{proxy}",
-            "user_agent": ua.random,
-            "sleep_interval": random.randint(1, 3),
-            "max_sleep_interval": 5,
         }
         if ffmpeg_path:
             ydl_opts["ffmpeg_location"] = ffmpeg_path
@@ -100,43 +81,35 @@ def download_youtube_audio_and_subtitles(
                 ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
         except yt_dlp.utils.DownloadError as e:
             logger.error(f"Error downloading audio for video {video_id}: {e}")
-            raise
+            return None
 
+    # Get subtitles if they don't exist
     if not os.path.exists(subtitle_file):
         try:
             transcript = YouTubeTranscriptApi.get_transcript(
-                video_id, languages=["zh-TW", "zh-CN", "zh"], proxies={"http": proxy}
+                video_id, languages=["zh-TW", "zh-CN", "zh"]
             )
             with open(subtitle_file, "w", encoding="utf-8") as f:
                 json.dump(transcript, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"Error getting transcript for video {video_id}: {e}")
-            raise
+            return None
 
     return audio_file, subtitle_file
 
 
 def crawl_youtube_playlist(
-    playlist_url: str,
-    output_dir: str,
-    ffmpeg_path: str = None,
-    file_prefix: str = "",
-    batch_size: int = 20,
-) -> List[Tuple[List[str], List[str]]]:
-    """Crawl videos in a YouTube playlist in batches with improved robustness."""
+    playlist_url, play_idx, output_dir, ffmpeg_path=None, file_prefix="", batch_size=20
+):
+    """Crawl videos in a YouTube playlist in batches."""
     playlist_id = extract_playlist_id(playlist_url)
     if not playlist_id:
         logger.error(f"Invalid playlist URL: {playlist_url}")
-        return []
-
-    ua = UserAgent()
-    proxy = get_random_proxy()
+        return [], []
 
     ydl_opts = {
         "extract_flat": True,
         "quiet": True,
-        "proxy": f"http://{proxy}",
-        "user_agent": ua.random,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -144,92 +117,107 @@ def crawl_youtube_playlist(
             f"https://www.youtube.com/playlist?list={playlist_id}", download=False
         )
 
-    batches = []
+    all_audio_files = []
+    all_subtitle_files = []
     batch_audio_files = []
     batch_subtitle_files = []
 
     for index, video in enumerate(playlist_dict["entries"]):
         video_id = video["id"]
         logger.info(f"Processing video: {video_id}")
-
-        try:
-            audio_file, subtitle_file = download_youtube_audio_and_subtitles(
-                video_id, output_dir, ffmpeg_path, file_prefix, index
-            )
+        result = download_youtube_audio_and_subtitles(
+            video_id, output_dir, ffmpeg_path, file_prefix, play_idx, index
+        )
+        if result:
+            audio_file, subtitle_file = result
             batch_audio_files.append(audio_file)
             batch_subtitle_files.append(subtitle_file)
-        except Exception as e:
-            logger.error(f"Failed to process video {video_id}: {e}")
-            continue
 
         if (
             len(batch_audio_files) == batch_size
             or index == len(playlist_dict["entries"]) - 1
         ):
-            batches.append((batch_audio_files, batch_subtitle_files))
+            all_audio_files.extend(batch_audio_files)
+            all_subtitle_files.extend(batch_subtitle_files)
+            yield batch_audio_files, batch_subtitle_files
             batch_audio_files = []
             batch_subtitle_files = []
 
-        # Add a random delay between video downloads
-        time.sleep(random.uniform(1, 3))
 
-    return batches
+# def create_dataset(audio_files, subtitle_files):
+#     """Create a Hugging Face dataset from a batch of files."""
+#     data = []
+#     for audio_file, subtitle_file in zip(audio_files, subtitle_files):
+#         with open(subtitle_file, "r", encoding="utf-8") as f:
+#             subtitle = json.load(f)
+#         text = " ".join([entry["text"] for entry in subtitle])
+#         data.append({"audio": f"{audio_file}.wav", "sentence": text})
 
+#     df = pd.DataFrame(data)
+#     return Dataset.from_pandas(df)
 
-def create_dataset(audio_files, subtitle_files, output_file):
-    """Create and save a Hugging Face dataset."""
-    data = []
-    for audio_file, subtitle_file in zip(audio_files, subtitle_files):
-        with open(subtitle_file, "r", encoding="utf-8") as f:
-            subtitle = json.load(f)
-        text = " ".join([entry["text"] for entry in subtitle])
-        data.append({"audio": f"{audio_file}.wav", "sentence": text})
-
-    df = pd.DataFrame(data)
-    dataset = Dataset.from_pandas(df)
-
-    # Save the dataset
-    dataset.save_to_disk(output_file)
-
-    logger.info(f"Dataset saved to {output_file}")
+# def slice_audio(audio: np.ndarray, start: float, duration: float, sampling_rate: int) -> np.ndarray:
+#     """Slice audio array based on start time and duration."""
+#     start_sample = int(start * sampling_rate)
+#     end_sample = int((start + duration) * sampling_rate)
+#     return audio[start_sample:end_sample]
 
 
-def parse_args() -> CrawlerArgs:
-    parser = argparse.ArgumentParser(
-        description="YouTube Audio Crawler and Dataset Creator"
-    )
-    parser.add_argument(
-        "--playlist_urls",
-        nargs="+",
-        required=True,
-        help="YouTube playlist URLs to crawl",
-    )
-    parser.add_argument(
-        "--output_dir",
-        default="./output",
-        help="Directory to save audio files and dataset",
-    )
-    parser.add_argument(
-        "--dataset_name",
-        default="youtube_dataset",
-        help="Name of the output dataset file",
-    )
-    parser.add_argument("--ffmpeg_path", help="Path to FFmpeg executable")
-    parser.add_argument(
-        "--file_prefix", default="youtube", help="Prefix for audio and subtitle files"
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=20,
-        help="Number of videos to process before saving",
-    )
+def create_dataset(audio_files, subtitle_files):
+    """Create a Hugging Face dataset from a batch of files."""
+    def generate_dataset_format():
+        for audio_file, subtitle_file in zip(audio_files, subtitle_files):
+            # Load audio file
+            audio_array, sampling_rate = librosa.load(f"{audio_file}.wav", 
+                                                      sr=None, 
+                                                      mono=True,  
+                                                      dtype=np.float32)
+            # audio_array, sampling_rate = sf.read(f"{audio_file}.wav")
+            
+            # Read subtitle file
+            with open(subtitle_file, "r", encoding="utf-8") as f:
+                subtitle = json.load(f)
+            
+            # Process each subtitle entry
+            for entry_idx, entry in enumerate(subtitle):
+                file_name = os.path.basename(audio_file)
+                # sliced_audio = slice_audio(audio_array, entry["start"], entry["duration"], sampling_rate)
+                yield {
+                    "client_id": f"{file_name}_{entry_idx}",
+                    "path": f"{audio_file}.wav",
+                    # "audio": {
+                    #     "path": f"{audio_file}.wav",
+                    #     "array": sliced_audio,
+                    #     "sampling_rate": sampling_rate
+                    # },
+                    "sentence": entry["text"],
+                    "start": entry["start"],
+                    "end": entry["start"]+entry["duration"],
+                    "duration": entry["duration"]
+                }
+            del audio_array
+            gc.collect()
+        # Create the dataset
 
-    args = parser.parse_args()
-    return CrawlerArgs(**vars(args))
+    return IterableDataset.from_generator(generate_dataset_format)
 
 
-def main(args: CrawlerArgs):
+def iterable_to_dataset(iterable_dataset):
+    """Convert an IterableDataset to a regular Dataset."""
+    data_dict = defaultdict(list)
+    for item in iterable_dataset:
+        for key, value in item.items():
+            data_dict[key].append(value)
+    return Dataset.from_dict(data_dict)
+
+
+def parse_args():
+    parser = HfArgumentParser(CrawlerArgs)
+    args = parser.parse_args_into_dataclasses()[0]
+    return args
+
+
+def main(args):
     if not args.playlist_urls:
         logger.error("At least one playlist URL must be provided.")
         sys.exit(1)
@@ -258,41 +246,36 @@ def main(args: CrawlerArgs):
 
     all_datasets = []
 
-    for playlist_url in args.playlist_urls:
+    for play_idx, playlist_url in enumerate(args.playlist_urls):
         logger.info(f"Processing playlist: {playlist_url}")
-        batches = crawl_youtube_playlist(
-            playlist_url,
-            args.output_dir,
-            args.ffmpeg_path,
-            args.file_prefix,
-            args.batch_size,
-        )
-
-        for batch_num, (batch_audio_files, batch_subtitle_files) in enumerate(batches):
+        for batch_num, (batch_audio_files, batch_subtitle_files) in enumerate(
+            crawl_youtube_playlist(
+                playlist_url,
+                play_idx,
+                args.output_dir,
+                args.ffmpeg_path,
+                args.file_prefix,
+                args.batch_size,
+            )
+        ):
             logger.info(f"Creating dataset for batch {batch_num + 1}")
-            batch_dataset = create_dataset(batch_audio_files, batch_subtitle_files)
+            batch_iterable_dataset = create_dataset(batch_audio_files, batch_subtitle_files)
+            batch_dataset = iterable_to_dataset(batch_iterable_dataset)
             all_datasets.append(batch_dataset)
 
             # Save intermediate dataset
             intermediate_dataset = concatenate_datasets(all_datasets)
             intermediate_dataset.save_to_disk(
-                os.path.join(
-                    args.output_dir, f"{args.dataset_name}"
-                )
+                os.path.join(args.output_dir, f"{args.dataset_name}")
             )
-            logger.info(
-                f"Intermediate dataset saved: {args.dataset_name}"
-            )
+            logger.info(f"Intermediate dataset saved: {args.dataset_name}")
 
-        # Add a longer delay between processing playlists
-        time.sleep(random.uniform(5, 10))
-
-    # Combine all datasets and save the final result
-    final_dataset = concatenate_datasets(all_datasets)
-    final_dataset.save_to_disk(os.path.join(args.output_dir, args.dataset_name))
-    logger.info(
-        f"Final dataset saved to {os.path.join(args.output_dir, args.dataset_name)}"
-    )
+        # Combine all datasets and save the final result
+        final_dataset = concatenate_datasets(all_datasets)
+        final_dataset.save_to_disk(os.path.join(args.output_dir, args.dataset_name))
+        logger.info(
+            f"Final dataset saved to {os.path.join(args.output_dir, args.dataset_name)}"
+        )
 
 
 if __name__ == "__main__":

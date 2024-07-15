@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, List, Union
 from transformers import Seq2SeqTrainingArguments
-import torch
-import os
 
 
 @dataclass
@@ -44,7 +42,7 @@ class DataArguments:
         metadata={"help": "The name of the dataset to use (via the datasets library)"}
     )
     dataset_config_names: Union[str, List[str]] = field(
-        default_factory=lambda: ["zh-TW"],
+        default_factory=lambda: None,
         metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
     )
     eval_dataset_name: str = field(
@@ -160,103 +158,88 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
 
 
 @dataclass
-class CrawlerArgs:
-    # List of YouTube playlist URLs to crawl
-    playlist_urls: List[str] = field(
-        default_factory=lambda: [],
-        metadata={"help": "YouTube playlist URLs to crawl"}
+class WhisperProcessorConfig:
+    # Feature Extractor Arguments
+    feature_size: int = field(
+        default=80,
+        metadata={"help": "The feature dimension of the extracted features."}
     )
-
-    # Directory to save audio files and dataset
-    output_dir: str = field(
-        default="./output",
-        metadata={"help": "Directory to save audio files and dataset"}
+    sampling_rate: int = field(
+        default=16000,
+        metadata={"help": "The sampling rate at which the audio files should be digitalized expressed in Hertz (Hz)."}
     )
-
-    # Name of the output dataset file
-    dataset_name: str = field(
-        default="youtube_dataset",
-        metadata={"help": "Name of the output dataset file"}
+    padding_value: float = field(
+        default=0.0,
+        metadata={"help": "The value that is used to fill the padding values."}
     )
-
-    # Path to FFmpeg executable (optional)
-    ffmpeg_path: Optional[str] = field(
-        default=None,
-        metadata={"help": "Path to FFmpeg executable"}
+    do_normalize: bool = field(
+        default=True,
+        metadata={"help": "Whether to zero-mean and unit-variance normalize the input."}
     )
-
-    # Prefix for audio and subtitle files
-    file_prefix: str = field(
-        default="youtube",
-        metadata={"help": "Prefix for audio and subtitle files"}
-    )
-    # Prefix for audio and subtitle files
-    batch_size: int = field(
-        default=20,
-        metadata={"help": "Prefix for audio and subtitle files"}
-    )
-
-
-@dataclass
-class InferenceArguments:
-    model_path: str = field(
-        metadata={"help": "Path to the ASR model"}
-    )
-    audio_files: List[str] = field(
-        default_factory=list,
-        metadata={"help": "Path to audio file(s)"}
-    )
-    mode: str = field(
-        default="batch",
-        metadata={"help": "Inference mode", "choices": ["batch", "stream"]}
-    )
-    use_timestamps: bool = field(
+    return_attention_mask: bool = field(
         default=False,
-        metadata={"help": "Include timestamps in transcription"}
+        metadata={"help": "Whether to return an attention mask."}
     )
-    use_peft: bool = field(
+    task: str = field(
+        default="transcribe",
+        metadata={"help": "The task token to use at the start of transcription."}
+    )
+    predict_timestamps: bool = field(
         default=False,
-        metadata={"help": "Use PEFT model"}
+        metadata={"help": "Whether to predict timestamps."}
     )
-    language: str = field(
-        default="chinese",
-        metadata={"help": "Language of the audio (e.g., 'chinese', 'taiwanese')"}
+    return_timestamps: bool = field(
+        default=False,
+        metadata={"help": "Whether to return timestamps in the decoded output."}
     )
-    device: str = field(
+    model_max_length: int = field(
+        default=448,
+        metadata={"help": "The maximum length of the model inputs."}
+    )
+    padding: Union[bool, str] = field(
+        default=True,
+        metadata={"help": "Padding strategy. Can be bool or 'max_length'."}
+    )
+    truncation: bool = field(
+        default=True,
+        metadata={"help": "Whether to truncate sequences longer than model_max_length."}
+    )
+
+    # Additional Processing Arguments
+    chunk_length_s: Optional[float] = field(
+        default=30.0,
+        metadata={"help": "The length of audio chunks to process in seconds."}
+    )
+    stride_length_s: Optional[float] = field(
         default=None,
-        metadata={"help": "Device to use for inference"}
+        metadata={"help": "The length of stride between audio chunks in seconds."}
     )
-    output_dir: str = field(
-        default="./output",
-        metadata={"help": "Directory to save output files"}
-    )
-    file_name: str = field(
-        default="translation_result.json",
-        metadata={"help": "Directory to save output files"}
+    ignore_warning: bool = field(
+        default=False,
+        metadata={"help": "Whether to ignore the warning raised when the audio is too short."}
     )
     
-    def __post_init__(self):
-        if self.device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        os.makedirs(self.output_dir, exist_ok=True)
-
-
-@dataclass
-class GradioArguments:
-    cache_dir: str = field(
-        default="asr_transcription_streaming_cache",
-        metadata={"help": "Path to store ASR result"}
+    # Decoding Arguments
+    skip_special_tokens: bool = field(
+        default=True,
+        metadata={"help": "Whether to remove special tokens in the decoding."}
     )
-    cache_streaming_filename: str = field(
-        default="asr_log_streaming.json",
-        metadata={"help": "File name to store ASR result"}
+    clean_up_tokenization_spaces: bool = field(
+        default=True,
+        metadata={"help": "Whether to clean up the tokenization spaces."}
     )
-    cache_batch_filename: str = field(
-        default="asr_log_batch.json",
-        metadata={"help": "File name to store ASR result"}
+
+    # Additional Configuration
+    forced_decoder_ids: Optional[List[List[int]]] = field(
+        default=None,
+        metadata={"help": "A list of pairs of integers which indicates a mapping\
+                           from generation indices to token indices that will be forced before sampling."}
     )
-    language: str = field(
-        default="chinese",
-        metadata={"help": "Language code for the model (e.g., zh-TW for Traditional Chinese)"}
+    suppress_tokens: Optional[List[int]] = field(
+        default=None,
+        metadata={"help": "A list of tokens that will be suppressed at generation."}
+    )
+    max_new_tokens: Optional[int] = field(
+        default=None,
+        metadata={"help": "The maximum numbers of tokens to generate, ignoring the number of tokens in the prompt."}
     )

@@ -6,7 +6,7 @@ from src.inference.flexible_inference import ChineseTaiwaneseASRInference
 import logging
 import os
 import json
-from src.config.train_config import InferenceArguments
+from src.config import InferenceArguments
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

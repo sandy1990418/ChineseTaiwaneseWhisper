@@ -1,4 +1,4 @@
-from typing import Optional, List, Union, Any
+from typing import Optional, List, Union, Any, Callable
 from torch.utils.data import Dataset, ConcatDataset
 from datasets import load_dataset, load_from_disk
 from transformers import WhisperProcessor
@@ -6,6 +6,7 @@ import librosa
 import logging
 import os
 import json
+import torch
 # import multiprocessing
 # from src.config.train_config import DataArguments
 
@@ -24,6 +25,7 @@ class ChineseTaiwaneseDataset(Dataset):
                  max_samples: Optional[int] = None,
                  dataset_config_names: Optional[Union[str, List[Any]]] = None,
                  use_timestamps: bool = False,
+                 processor_config: Callable = None,
                  *args,
                  **kwargs):
         if isinstance(dataset_names, str):
@@ -35,10 +37,10 @@ class ChineseTaiwaneseDataset(Dataset):
         # Ensure dataset_config_names is at least as long as dataset_names
         if len(dataset_config_names) < len(dataset_names):
             dataset_config_names.extend([None] * (len(dataset_names) - len(dataset_config_names)))
-        
         datasets = []
 
         for dataset_name, config_name in zip(dataset_names, dataset_config_names):
+            logger.info(f"{dataset_name}")
             try:
                 dataset = load_dataset(dataset_name, config_name, split=split)
             except ValueError:
@@ -56,6 +58,8 @@ class ChineseTaiwaneseDataset(Dataset):
 
         if use_timestamps:
             self.processor.tokenizer.predict_timestamps = True
+
+        self.processor_config = processor_config
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -92,16 +96,43 @@ class ChineseTaiwaneseDataset(Dataset):
                 text = str(text)
 
             # Tokenize text
-            labels = self.processor.tokenizer(text, return_tensors="pt").input_ids
+            encoded_text = self.processor.tokenizer(text, 
+                                                    return_tensors="pt", 
+                                                    padding=self.processor_config.padding, 
+                                                    truncation=self.processor_config.truncation, 
+                                                    max_length=self.processor_config.model_max_length)
+            labels = encoded_text.input_ids
+
+            # Ensure input_features and labels have the correct shape
+            input_features = input_features.squeeze(0)
+            labels = labels.squeeze(0)
+
+            # Pad or truncate input_features if necessary
+            target_length = 3000  # Adjust this value based on your model's requirements
+            if input_features.shape[1] < target_length:
+                pad_length = target_length - input_features.shape[1]
+                input_features = torch.nn.functional.pad(input_features, (0, pad_length))
+            elif input_features.shape[1] > target_length:
+                input_features = input_features[:, :target_length]
 
             return {
-                "input_features": input_features.squeeze(),
-                "labels": labels.squeeze()
+                "input_features": input_features,
+                "labels": labels
             }
         except Exception as e:
             logger.error(f"Error processing item at index {idx}: {e}")
             logger.error(f"Item contents: {item}")
             raise
+        #     labels = self.processor.tokenizer(text, return_tensors="pt").input_ids
+
+        #     return {
+        #         "input_features": input_features.squeeze(),
+        #         "labels": labels.squeeze()
+        #     }
+        # except Exception as e:
+        #     logger.error(f"Error processing item at index {idx}: {e}")
+        #     logger.error(f"Item contents: {item}")
+        #     raise
     
     def _process_timestamps(self, item):
         try:
