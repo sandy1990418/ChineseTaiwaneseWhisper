@@ -5,9 +5,14 @@ from typing import Optional, List
 @dataclass
 class CrawlerArgs:
     # List of YouTube playlist URLs to crawl
-    playlist_urls: List[str] = field(
+    playlist_urls: Optional[List[str]] = field(
         default_factory=lambda: [],
         metadata={"help": "YouTube playlist URLs to crawl"}
+    )
+    
+    audio_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "YouTube audio dir which are already be crawled"}
     )
 
     # Directory to save audio files and dataset

@@ -3,15 +3,18 @@ import re
 import json
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
+from tqdm import tqdm
+import soundfile as sf
+from pathlib import Path
 # import pandas as pd
 import subprocess
 import sys
 import logging
-from datasets import Dataset, concatenate_datasets, IterableDataset
+from datasets import Dataset, IterableDataset
 from src.config import CrawlerArgs
 import librosa
 from transformers import HfArgumentParser
-import numpy as np 
+import numpy as np
 from collections import defaultdict
 import gc
 
@@ -165,19 +168,19 @@ def crawl_youtube_playlist(
 
 def create_dataset(audio_files, subtitle_files):
     """Create a Hugging Face dataset from a batch of files."""
+
     def generate_dataset_format():
         for audio_file, subtitle_file in zip(audio_files, subtitle_files):
             # Load audio file
-            audio_array, sampling_rate = librosa.load(f"{audio_file}.wav", 
-                                                      sr=None, 
-                                                      mono=True,  
-                                                      dtype=np.float32)
+            audio_array, sampling_rate = librosa.load(
+                f"{audio_file}.wav", sr=None, mono=True, dtype=np.float32
+            )
             # audio_array, sampling_rate = sf.read(f"{audio_file}.wav")
-            
+
             # Read subtitle file
             with open(subtitle_file, "r", encoding="utf-8") as f:
                 subtitle = json.load(f)
-            
+
             # Process each subtitle entry
             for entry_idx, entry in enumerate(subtitle):
                 file_name = os.path.basename(audio_file)
@@ -192,8 +195,8 @@ def create_dataset(audio_files, subtitle_files):
                     # },
                     "sentence": entry["text"],
                     "start": entry["start"],
-                    "end": entry["start"]+entry["duration"],
-                    "duration": entry["duration"]
+                    "end": entry["start"] + entry["duration"],
+                    "duration": entry["duration"],
                 }
             del audio_array
             gc.collect()
@@ -211,6 +214,124 @@ def iterable_to_dataset(iterable_dataset):
     return Dataset.from_dict(data_dict)
 
 
+def append_to_json(segments, json_path):
+    """
+    Append segments to a single JSON file.
+    If the file doesn't exist, it creates a new one.
+    """
+    if os.path.exists(json_path):
+        with open(json_path, "r+", encoding="utf-8") as f:
+            data = json.load(f)
+            data.extend(segments)
+            f.seek(0)
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.truncate()
+    else:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(segments, f, ensure_ascii=False, indent=4)
+
+
+def process_audio_file(audio_file, subtitle_file, output_dir, json_path, max_duration=30):
+    """
+    Process a single audio file: split it and append segment information to the JSON file.
+    Only process if the subtitle file exists and skip empty segments.
+    """
+    # Check if subtitle file exists
+    if not subtitle_file or not os.path.exists(subtitle_file):
+        logger.warning(f"Subtitle file not found for {audio_file}. Skipping this audio file.")
+        return
+
+    # Load the audio file
+    audio, sr = librosa.load(audio_file, sr=None, mono=True)
+    
+    # Load subtitle data
+    with open(subtitle_file, 'r', encoding='utf-8') as f:
+        subtitles = json.load(f)
+    
+    # Create output directories
+    split_audio_dir = os.path.join(output_dir, "split_audio")
+    os.makedirs(split_audio_dir, exist_ok=True)
+    
+    segments = []
+    
+    for subtitle in subtitles:
+        # Skip empty subtitles
+        if not subtitle['text'].strip():
+            continue
+
+        start_time = float(subtitle['start'])
+        end_time = start_time + float(subtitle['duration'])
+        
+        # Ensure the segment is not too long
+        if end_time - start_time > max_duration:
+            end_time = start_time + max_duration
+
+        # Extract the audio segment
+        start_sample = int(start_time * sr)
+        end_sample = int(end_time * sr)
+        split_audio = audio[start_sample:end_sample]
+        
+        # Save the split audio
+        segment_filename = f"{Path(audio_file).stem}_{len(segments):04d}.wav"
+        segment_path = os.path.join(split_audio_dir, segment_filename)
+        sf.write(segment_path, split_audio, sr)
+        
+        # Add segment info
+        segments.append({
+            "audio_path": segment_path,
+            "start": start_time,
+            "end": end_time,
+            "text": subtitle['text'].strip()
+        })
+
+    # Only append if there are valid segments
+    if segments:
+        append_to_json(segments, json_path)
+    else:
+        logger.warning(f"No valid segments found for {audio_file}. Skipping this audio file.")
+        
+
+def create_dataset_from_json(json_file):
+    """Create a Hugging Face dataset from a JSON file."""
+    with open(json_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return Dataset.from_dict(
+        {
+            "client_id": [
+                f"{os.path.basename(item['audio_path'])}_{i}"
+                for i, item in enumerate(data)
+            ],
+            "path": [item["audio_path"] for item in data],
+            "sentence": [item["text"] for item in data],
+            "start": [item["start"] for item in data],
+            "end": [item["end"] for item in data],
+            "duration": [item["end"] - item["start"] for item in data],
+        }
+    )
+
+
+def convert_dataset_to_json(dataset, output_file):
+    """Convert a Hugging Face dataset to a JSON file that can be read by load_dataset."""
+    data = []
+    for item in tqdm(dataset, desc="Converting dataset to JSON"):
+        data.append(
+            {
+                "client_id": item["client_id"],
+                "path": item["path"],
+                "sentence": item["sentence"],
+                "start": item["start"],
+                "end": item["end"],
+                "duration": item["duration"],
+            }
+        )
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"Dataset saved as JSON: {output_file}")
+
+
 def parse_args():
     parser = HfArgumentParser(CrawlerArgs)
     args = parser.parse_args_into_dataclasses()[0]
@@ -218,10 +339,6 @@ def parse_args():
 
 
 def main(args):
-    if not args.playlist_urls:
-        logger.error("At least one playlist URL must be provided.")
-        sys.exit(1)
-
     if not args.output_dir:
         logger.error("Output directory must be specified.")
         sys.exit(1)
@@ -244,38 +361,52 @@ def main(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    all_datasets = []
+    json_path = os.path.join(args.output_dir, f"{args.dataset_name}.json")
 
-    for play_idx, playlist_url in enumerate(args.playlist_urls):
-        logger.info(f"Processing playlist: {playlist_url}")
-        for batch_num, (batch_audio_files, batch_subtitle_files) in enumerate(
-            crawl_youtube_playlist(
-                playlist_url,
-                play_idx,
-                args.output_dir,
-                args.ffmpeg_path,
-                args.file_prefix,
-                args.batch_size,
-            )
+    if args.playlist_urls:
+        # Process YouTube playlists
+        for play_idx, playlist_url in enumerate(args.playlist_urls):
+            logger.info(f"Processing playlist: {playlist_url}")
+            for batch_num, (batch_audio_files, batch_subtitle_files) in enumerate(
+                crawl_youtube_playlist(
+                    playlist_url,
+                    play_idx,
+                    args.output_dir,
+                    args.ffmpeg_path,
+                    args.file_prefix,
+                    args.batch_size,
+                )
+            ):
+                logger.info(f"Processing batch {batch_num + 1}")
+
+                # Process and split audio files
+                for audio_file, subtitle_file in zip(
+                    batch_audio_files, batch_subtitle_files
+                ):
+                    process_audio_file(
+                        f"{audio_file}.wav", subtitle_file, args.output_dir, json_path
+                    )
+
+    if args.audio_dir:
+        # Process existing audio files
+        audio_files = [
+            os.path.join(args.audio_dir, f)
+            for f in os.listdir(args.audio_dir)
+            if f.endswith(".wav")
+        ]
+        subtitle_files = [
+            os.path.join(os.path.dirname(args.audio_dir), "subtitles", f.replace(".wav", ".json"))
+            for f in os.listdir(args.audio_dir)
+            if f.endswith(".wav")
+        ]
+        for audio_file, subtitle_file in tqdm(
+            zip(audio_files, subtitle_files),
+            total=len(audio_files),
+            desc="Processing audio files",
         ):
-            logger.info(f"Creating dataset for batch {batch_num + 1}")
-            batch_iterable_dataset = create_dataset(batch_audio_files, batch_subtitle_files)
-            batch_dataset = iterable_to_dataset(batch_iterable_dataset)
-            all_datasets.append(batch_dataset)
+            process_audio_file(audio_file, subtitle_file, args.output_dir, json_path)
 
-            # Save intermediate dataset
-            intermediate_dataset = concatenate_datasets(all_datasets)
-            intermediate_dataset.save_to_disk(
-                os.path.join(args.output_dir, f"{args.dataset_name}")
-            )
-            logger.info(f"Intermediate dataset saved: {args.dataset_name}")
-
-        # Combine all datasets and save the final result
-        final_dataset = concatenate_datasets(all_datasets)
-        final_dataset.save_to_disk(os.path.join(args.output_dir, args.dataset_name))
-        logger.info(
-            f"Final dataset saved to {os.path.join(args.output_dir, args.dataset_name)}"
-        )
+    logger.info(f"All segments saved to: {json_path}")
 
 
 if __name__ == "__main__":

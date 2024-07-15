@@ -58,7 +58,7 @@ class DataArguments:
         metadata={"help": "The name of the column in the datasets containing the full texts."},
     )
     audio_column: str = field(
-        default="audio",
+        default="path",
         metadata={"help": "The name of the column in the datasets containing the audio files"},
     )
     max_train_samples: Optional[int] = field(
