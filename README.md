@@ -59,14 +59,13 @@ ChineseTaiwaneseWhisper/
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --dataset_config_names "zh-TW" \
                         --youtube_data_dir "./youtube_data" \
                         --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
-                        --learning_rate 3e-5 \
+                        --learning_rate 1e-5 \
                         --fp16 \
-                        --use_timestamps False
+                        --timestamp False
 ```
 
 #### PEFT Fine-tuning (e.g., LoRA)
@@ -75,15 +74,13 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --use_peft \
                         --peft_method "lora" \
-                        --dataset_name "mozilla-foundation/common_voice_11_0" \
-                        --dataset_config_names "zh-TW" \
-                        --youtube_data_dir "./youtube_data" \
-                        --output_dir "./whisper-peft-finetuned-zh-tw" \
-                        --num_train_epochs 3 \
-                        --per_device_train_batch_size 16 \
-                        --learning_rate 3e-5 \
-                        --fp16 \
-                        --use_timestamps False
+                        --dataset "common_voice_13_train","youtube_data"  \
+                        --output_dir "Checkpoint_Path" \
+                        --num_train_epochs 10  \
+                        --per_device_train_batch_size 4 \
+                        --learning_rate 1e-5  \
+                        --fp16\
+                        --timestamp True
 ```
 
 #### Training Arguments
