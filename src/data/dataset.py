@@ -20,7 +20,8 @@ class ChineseTaiwaneseDataset:
     ):
         self.args = args
         self.processor = processor
-        if split == "train":
+        self.split = split
+        if self.split == "train":
             self.args.init_for_training()
         else: 
             self.args.dataset = self.args.test_dataset_name
@@ -54,6 +55,8 @@ class ChineseTaiwaneseDataset:
         combined_dataset = concatenate_datasets(datasets)
         logger.info(f"Combined dataset features: {combined_dataset.features}")
         combined_dataset = combined_dataset.shuffle(seed=42)
+        if self.split == 'test':
+            combined_dataset = combined_dataset.select(range(1000))
 
         return combined_dataset.map(
             self._preprocess_function,

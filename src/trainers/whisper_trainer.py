@@ -3,22 +3,6 @@ import evaluate
 
 wer_metric = evaluate.load("wer")
 
-
-def compute_metrics(pred):
-    pred_ids = pred.predictions
-    label_ids = pred.label_ids
-
-    # Replace -100 with the pad_token_id
-    label_ids[label_ids == -100] = pred.processor.tokenizer.pad_token_id
-
-    # Decode predictions and labels
-    pred_str = pred.processor.batch_decode(pred_ids, skip_special_tokens=True)
-    label_str = pred.processor.batch_decode(label_ids, skip_special_tokens=True)
-
-    wer = wer_metric.compute(predictions=pred_str, references=label_str)
-
-    return {"wer": wer}
-
 # class WhisperTrainer(Seq2SeqTrainer):
 #     def compute_loss(self, model, inputs, return_outputs=False):
 #         input_features = inputs.get("input_features")
@@ -35,7 +19,7 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
     
     # Disable caching
     model.config.use_cache = False
-
+    
     # # Verify that parameters require gradients
     for name, param in model.named_parameters():
         if not param.requires_grad:
@@ -45,6 +29,21 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
     # # Print total number of trainable parameters
     # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print(f"Total trainable parameters: {trainable_params}")
+
+    def compute_metrics(pred):
+        pred_ids = pred.predictions
+        label_ids = pred.label_ids
+
+        # Replace -100 with the pad_token_id
+        label_ids[label_ids == -100] = processor.tokenizer.pad_token_id
+
+        # Decode predictions and labels
+        pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        label_str = processor.tokenizer.batch_decode(label_ids, skip_special_tokens=True)
+
+        wer = wer_metric.compute(predictions=pred_str, references=label_str)
+
+        return {"wer": wer}
 
     return Seq2SeqTrainer(
         model=model,

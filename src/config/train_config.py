@@ -42,11 +42,11 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
     per_device_train_batch_size: int = field(
-        default=64, 
+        default=32, 
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=64,
+        default=32,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     gradient_accumulation_steps: int = field(
@@ -61,8 +61,16 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default=500, 
         metadata={"help": "Linear warmup over warmup_steps."}
     )
+    warmup_ratio: float = field(
+        default=0.1, 
+        metadata={"help": "Linear warmup over warmup_ratio."}
+    )
+    lr_scheduler_type: str = field(
+        default="cosine", 
+        metadata={"help": "lr_scheduler_types."}
+    )
     learning_rate: float = field(
-        default=1e-5, 
+        default=5e-5, 
         metadata={"help": "The initial learning rate for AdamW."}
     )
     fp16: bool = field(
@@ -86,11 +94,11 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
-        default=2,
+        default=1,
         metadata={"help": "Limit the total amount of checkpoints."}
     )
     metric_for_best_model: str = field(
-        default="wer",
+        default="loss",
         metadata={"help": "The metric to use to compare two different models."}
     )
     greater_is_better: bool = field(
@@ -98,7 +106,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Whether the `metric_for_best_model` should be maximized or not."}
     )
     load_best_model_at_end: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "Whether or not to load the best model found during training at the end of training."}
     )
     max_steps: int = field(
@@ -117,6 +125,23 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     gradient_checkpointing: bool = field(
         default=True,
         metadata={"help": "If True, use gradient checkpointing to save memory at the expense of slower backward pass."}
+    )
+    dataloader_pin_memory: bool = field(
+        default=True,
+        metadata={"help": "If True, use dataloader_pin_memory"}
+    )    
+    predict_with_generate: bool = field(
+        default=True,
+        metadata={"help": "If True, use predict_with_generate"}
+    )    
+    max_grad_norm: float = field(
+        default=1.0, 
+        metadata={"help": "max_grad_norm."}
+    )
+    eval_accumulation_steps: int = field(
+        default=2,
+        metadata={"help": "Number of updates steps to accumulate before performing \
+            a backward/update pass in evaluation."}
     )
 
 
