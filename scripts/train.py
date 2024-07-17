@@ -1,6 +1,6 @@
 import sys
-from transformers import HfArgumentParser, Seq2SeqTrainingArguments
-from src.config import ModelArguments, DataArguments, WhisperProcessorConfig
+from transformers import HfArgumentParser
+from src.config import ModelArguments, DataArguments, WhisperProcessorConfig, WhisperTrainingArguments
 from src.model.whisper_model import load_whisper_model
 from src.data.dataset import ChineseTaiwaneseDataset  
 from src.data.data_collator import WhisperDataCollator
@@ -11,7 +11,7 @@ from src.trainers.whisper_trainer import get_trainer
 def main():
     parser = HfArgumentParser((ModelArguments, 
                                DataArguments, 
-                               Seq2SeqTrainingArguments, 
+                               WhisperTrainingArguments, 
                                WhisperProcessorConfig))
     
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):

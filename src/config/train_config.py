@@ -42,12 +42,16 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
     per_device_train_batch_size: int = field(
-        default=16, 
+        default=64, 
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=8,
+        default=64,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
+    )
+    gradient_accumulation_steps: int = field(
+        default=8,
+        metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."}
     )
     num_train_epochs: float = field(
         default=3.0, 
@@ -58,7 +62,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Linear warmup over warmup_steps."}
     )
     learning_rate: float = field(
-        default=3e-4, 
+        default=1e-5, 
         metadata={"help": "The initial learning rate for AdamW."}
     )
     fp16: bool = field(
@@ -70,15 +74,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The evaluation strategy to use."}
     )
     save_steps: int = field(
-        default=1000,
+        default=500,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=1000,
+        default=500,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=10,
+        default=100,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
@@ -100,6 +104,19 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     max_steps: int = field(
         default=-1,
         metadata={"help": "If > 0: set total number of training steps to perform. Override num_train_epochs."}
+    )
+    dataloader_num_workers: int = field(
+        default=1,
+        metadata={"help": "Number of subprocesses to use for data loading."}
+    )
+    ddp_find_unused_parameters: Optional[bool] = field(
+        default=False,
+        metadata={"help": "When using distributed training, the value of the flag \
+            `find_unused_parameters` passed to `DistributedDataParallel`."}
+    )
+    gradient_checkpointing: bool = field(
+        default=True,
+        metadata={"help": "If True, use gradient checkpointing to save memory at the expense of slower backward pass."}
     )
 
 

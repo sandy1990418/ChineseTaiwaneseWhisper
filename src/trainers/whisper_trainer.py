@@ -30,6 +30,22 @@ def compute_metrics(pred):
 
 
 def get_trainer(model, args, train_dataset, eval_dataset, data_collator, processor):
+    # Enable gradient checkpointing
+    model.gradient_checkpointing_enable()
+    
+    # Disable caching
+    model.config.use_cache = False
+
+    # # Verify that parameters require gradients
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            param.requires_grad = True
+    #         print(f"Warning: {name} does not require gradients")
+
+    # # Print total number of trainable parameters
+    # trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # print(f"Total trainable parameters: {trainable_params}")
+
     return Seq2SeqTrainer(
         model=model,
         args=args,
