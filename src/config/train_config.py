@@ -36,60 +36,6 @@ class ModelArguments:
 
 
 @dataclass
-class DataArguments:
-    dataset_name: Union[str, List[str]] = field(
-        default_factory=lambda: ["mozilla-foundation/common_voice_11_0"],
-        metadata={"help": "The name of the dataset to use (via the datasets library)"}
-    )
-    dataset_config_names: Union[str, List[str]] = field(
-        default_factory=lambda: None,
-        metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
-    )
-    eval_dataset_name: str = field(
-        default="mozilla-foundation/common_voice_11_0",
-        metadata={"help": "The name of the dataset to use (via the datasets library)"}
-    )
-    eval_dataset_config_names: str = field(
-        default="zh-TW",
-        metadata={"help": "The configuration name of the dataset to use (via the datasets library)"}
-    )
-    text_column: str = field(
-        default="sentence",
-        metadata={"help": "The name of the column in the datasets containing the full texts."},
-    )
-    audio_column: str = field(
-        default="path",
-        metadata={"help": "The name of the column in the datasets containing the audio files"},
-    )
-    max_train_samples: Optional[int] = field(
-        default=None,
-        metadata={"help": "For debugging purposes or quicker training, truncate the number of \
-                  training examples to this value if set."}
-    )
-    max_eval_samples: Optional[int] = field(
-        default=None,
-        metadata={"help": "For debugging purposes or quicker training, truncate the number of\
-                   evaluation examples to this value if set."}
-    )
-    preprocessing_num_workers: Optional[int] = field(
-        default=1,
-        metadata={"help": "The number of processes to use for the preprocessing."},
-    )
-    youtube_data_dir: str = field(
-        default="./youtube_data",
-        metadata={"help": "Directory containing YouTube audio and subtitle data"}
-    )
-    max_input_length: int = field(
-        default=30,
-        metadata={"help": "Maximum input length in seconds for audio clips"}
-    )
-    use_timestamps: bool = field(
-        default=False,
-        metadata={"help": "Use timestamp or not."}
-    )
-
-
-@dataclass
 class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     output_dir: str = field(
         default="./whisper-finetuned",
@@ -164,10 +110,6 @@ class WhisperProcessorConfig:
         default=80,
         metadata={"help": "The feature dimension of the extracted features."}
     )
-    sampling_rate: int = field(
-        default=16000,
-        metadata={"help": "The sampling rate at which the audio files should be digitalized expressed in Hertz (Hz)."}
-    )
     padding_value: float = field(
         default=0.0,
         metadata={"help": "The value that is used to fill the padding values."}
@@ -192,8 +134,8 @@ class WhisperProcessorConfig:
         default=False,
         metadata={"help": "Whether to return timestamps in the decoded output."}
     )
-    model_max_length: int = field(
-        default=448,
+    model_max_length: Optional[int] = field(
+        default=1024,
         metadata={"help": "The maximum length of the model inputs."}
     )
     padding: Union[bool, str] = field(

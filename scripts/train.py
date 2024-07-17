@@ -2,14 +2,17 @@ import sys
 from transformers import HfArgumentParser, Seq2SeqTrainingArguments
 from src.config import ModelArguments, DataArguments, WhisperProcessorConfig
 from src.model.whisper_model import load_whisper_model
-from src.data.dataset import ChineseTaiwaneseDataset  # ChineseTaiwaneseDataset
+from src.data.dataset import ChineseTaiwaneseDataset  
 from src.data.data_collator import WhisperDataCollator
 from src.trainers.whisper_trainer import get_trainer
 # from peft import LoraConfig, TaskType
 
 
 def main():
-    parser = HfArgumentParser((ModelArguments, DataArguments, Seq2SeqTrainingArguments, WhisperProcessorConfig))
+    parser = HfArgumentParser((ModelArguments, 
+                               DataArguments, 
+                               Seq2SeqTrainingArguments, 
+                               WhisperProcessorConfig))
     
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         model_args, data_args, training_args, procrssor_args = parser.parse_json_file(json_file=sys.argv[1])
@@ -34,25 +37,13 @@ def main():
         peft_config=peft_config,
         language=model_args.language
     )
-    train_dataset = ChineseTaiwaneseDataset(dataset_names=data_args.dataset_name, 
-                                            split="train", 
-                                            processor=processor, 
-                                            text_column=data_args.text_column,
-                                            audio_column=data_args.audio_column,
-                                            max_samples=data_args.max_train_samples,
-                                            dataset_config_names=data_args.dataset_config_names,
-                                            use_timestamps=data_args.use_timestamps,
-                                            processor_config=procrssor_args)
-    
-    eval_dataset = ChineseTaiwaneseDataset(dataset_names=data_args.eval_dataset_name, 
-                                           split="test", 
-                                           processor=processor, 
-                                           text_column=data_args.text_column,
-                                           audio_column=data_args.audio_column,
-                                           max_samples=data_args.max_train_samples,
-                                           dataset_config_names=data_args.eval_dataset_config_names,
-                                           use_timestamps=data_args.use_timestamps,
-                                           processor_config=procrssor_args)
+
+    processor.tokenizer.model_max_length = model.config.max_length
+
+    train_dataset, eval_dataset = ChineseTaiwaneseDataset.create_train_and_test_datasets(
+        data_args, 
+        processor, 
+    )
 
     data_collator = WhisperDataCollator(
         processor=processor,

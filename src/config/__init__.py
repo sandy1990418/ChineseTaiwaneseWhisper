@@ -1,8 +1,8 @@
 from .inference_config import InferenceArguments
 from .gradio_config import GradioArguments
 from .crawler_config import CrawlerArgs
-from .train_config import ModelArguments, DataArguments, WhisperTrainingArguments, WhisperProcessorConfig
-
+from .train_config import ModelArguments, WhisperTrainingArguments, WhisperProcessorConfig
+from .data_config import DataArguments, DatasetAttr
 
 __all__ = [
     "InferenceArguments",
@@ -10,6 +10,7 @@ __all__ = [
     "CrawlerArgs",
     "ModelArguments",
     "DataArguments",
+    "DatasetAttr",
     "WhisperTrainingArguments",
     "WhisperProcessorConfig"
 ]
