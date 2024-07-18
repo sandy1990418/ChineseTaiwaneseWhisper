@@ -58,7 +58,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Total number of training epochs to perform."}
     )
     warmup_steps: int = field(
-        default=500, 
+        default=50, 
         metadata={"help": "Linear warmup over warmup_steps."}
     )
     warmup_ratio: float = field(
@@ -70,7 +70,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "lr_scheduler_types."}
     )
     learning_rate: float = field(
-        default=5e-5, 
+        default=1e-5, 
         metadata={"help": "The initial learning rate for AdamW."}
     )
     fp16: bool = field(
@@ -82,19 +82,19 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The evaluation strategy to use."}
     )
     save_steps: int = field(
-        default=500,
+        default=50,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=500,
+        default=50,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=100,
+        default=50,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
-        default=1,
+        default=-1,
         metadata={"help": "Limit the total amount of checkpoints."}
     )
     metric_for_best_model: str = field(

@@ -152,3 +152,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# TODO : convert model to Ctranslate2 
+# TODO : Distil-model
+# TODO : Teacher-student 
+# TODO : Speculative decoding
