@@ -77,7 +77,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default=True,
         metadata={"help": "Whether to use 16-bit (mixed) precision instead of 32-bit"}
     )
-    evaluation_strategy: str = field(
+    eval_strategy: str = field(
         default="steps",
         metadata={"help": "The evaluation strategy to use."}
     )
@@ -142,6 +142,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default=2,
         metadata={"help": "Number of updates steps to accumulate before performing \
             a backward/update pass in evaluation."}
+    )
+    dataloader_num_workers: int = field(
+        default=0,
+        metadata={"help": "Number of subprocesses to use for data loading (PyTorch only). \
+            0 means that the data will be loaded in the main process."}
+    )
+    remove_unused_columns: bool = field(
+        default=False,
+        metadata={"help": "Whether or not to automatically remove the columns unused by the model forward method."}
     )
 
 

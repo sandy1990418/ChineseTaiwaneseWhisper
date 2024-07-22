@@ -38,8 +38,9 @@ def main():
         language=model_args.language
     )
 
-    processor.tokenizer.model_max_length = model.config.max_length
-
+    # processor.tokenizer.model_max_length = model.config.max_length
+    model.config.forced_decoder_ids = None
+    model.config.suppress_tokens = []
     train_dataset, eval_dataset = ChineseTaiwaneseDataset.create_train_and_test_datasets(
         data_args, 
         processor, 
@@ -47,7 +48,6 @@ def main():
 
     data_collator = WhisperDataCollator(
         processor=processor,
-        decoder_start_token_id=model.config.decoder_start_token_id,
     )
     trainer = get_trainer(
         model=model,

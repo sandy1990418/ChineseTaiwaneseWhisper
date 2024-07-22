@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Literal
 import os
 import json
 
@@ -22,7 +22,7 @@ class DatasetAttr:
 @dataclass
 class DataArguments:
     dataset: Optional[str] = field(
-        default="common_voice_13_asr",
+        default=None,
         metadata={"help": "The name of provided dataset(s) to use. Use commas to separate multiple datasets."}
     )
     dataset_dir: Optional[str] = field(
@@ -68,6 +68,18 @@ class DataArguments:
         default=False,
         metadata={"help": "Timestamp to control CommonVoice_13 add timestamp value."}
     )
+    mix_strategy: Optional[Literal["concat", "interleave_under", "interleave_over"]] = field(
+        default="concat",
+        metadata={"help": "Strategy to use in dataset mixing."}
+    )
+    interleave_probs: Optional[str] = field(
+        default=None,
+        metadata={"help": "Probabilities to sample data from datasets. Use commas to separate multiple datasets."}
+    )
+    streaming: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Enable streaming mode."}
+    )
 
     def init_for_training(self):
         dataset_names = [ds.strip() for ds in self.dataset.split(",")]
@@ -110,6 +122,5 @@ class DataArguments:
             dataset_attr.dataset_kwargs = dataset_config.get("dataset_kwargs", {})
 
             self.dataset_list.append(dataset_attr)
-
         if not self.dataset_list:
             raise ValueError("No valid datasets found in the configuration.")

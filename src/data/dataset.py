@@ -1,13 +1,28 @@
 import logging
-from datasets import load_dataset, Dataset as HFDataset, concatenate_datasets, Audio, Features
+from datasets import load_dataset, Dataset as HFDataset, concatenate_datasets, interleave_datasets, Audio, Features
 from transformers import WhisperProcessor
 from src.config import DataArguments, DatasetAttr
 import librosa
 import os
 import torch
+from typing import List
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+MAX_DURATION_IN_SECONDS = 30.0
+max_input_length = MAX_DURATION_IN_SECONDS * 16000
+
+
+def is_audio_in_length_range(length):
+    return 0 < length < max_input_length
+
+    
+def filter_labels(labels_length):
+    """Filter label sequences longer than max length (448)"""
+    return labels_length < 448
 
 
 class ChineseTaiwaneseDataset:
@@ -53,18 +68,49 @@ class ChineseTaiwaneseDataset:
 
         logger.info("Concatenating datasets...")
         combined_dataset = concatenate_datasets(datasets)
+
+        if len(self.args.dataset) == 1:
+            combined_dataset = datasets
+        elif self.args.mix_strategy == "concat":
+            if self.args.streaming:
+                logger.warning("The samples between different datasets will not be mixed in streaming mode.")
+            combined_dataset = concatenate_datasets(datasets)
+        elif self.args.mix_strategy.startswith("interleave"):
+            if not self.args.streaming:
+                logger.warning("We recommend using `mix_strategy=concat` in non-streaming mode.")
+            stopping_strategy = "first_exhausted" if self.args.mix_strategy.endswith("under") else "all_exhausted"
+            combined_dataset = interleave_datasets(datasets, 
+                                                   self.args.interleave_probs, 
+                                                   stopping_strategy=stopping_strategy)
+        else:
+            raise ValueError("Unknown mixing strategy.")
+
         logger.info(f"Combined dataset features: {combined_dataset.features}")
         combined_dataset = combined_dataset.shuffle(seed=42)
+
         if self.split == 'test':
             combined_dataset = combined_dataset.select(range(1000))
-
-        return combined_dataset.map(
+        
+        # columns_to_remove = [col for col in combined_dataset.column_names if col not in ["input_features", "labels"]]
+        column_names = list(next(iter(combined_dataset)).keys())
+        
+        combined_dataset = combined_dataset.map(
             self._preprocess_function,
-            remove_columns=combined_dataset.column_names,
+            remove_columns=column_names,
             num_proc=self.args.preprocessing_num_workers,
             desc="Running preprocessor on dataset",
             batched=False,
+            load_from_cache_file=not self.args.overwrite_cache,
         )
+        combined_dataset = combined_dataset.filter(
+            is_audio_in_length_range,        
+            input_columns=["input_length"]
+        )
+        combined_dataset = combined_dataset.filter(
+            is_audio_in_length_range,        
+            input_columns=["labels_length"]
+        )
+        return combined_dataset
 
     def _load_from_hf_hub(self, dataset_attr: DatasetAttr) -> HFDataset:
         dataset = load_dataset(
@@ -113,13 +159,13 @@ class ChineseTaiwaneseDataset:
             audio = example["audio"]
             if isinstance(audio, dict):
                 audio_array = audio["array"]
-                sampling_rate = audio["sampling_rate"]
-            # elif isinstance(audio, str):
-            #     # If audio is a file path, load it
-            #     audio_array, sampling_rate = librosa.load(audio, sr=self.args.sampling_rate)
+                sampling_rate = audio["sampling_rate"]    
             else:
                 raise ValueError(f"Unexpected audio type: {type(audio)}")
 
+            # elif isinstance(audio, str):
+            #     # If audio is a file path, load it
+            #     audio_array, sampling_rate = librosa.load(audio, sr=self.args.sampling_rate)
             # Resample if necessary
             if sampling_rate != self.args.sampling_rate:
                 audio_array = librosa.resample(audio_array, orig_sr=sampling_rate, target_sr=self.args.sampling_rate)
@@ -128,17 +174,19 @@ class ChineseTaiwaneseDataset:
             max_samples = int(self.args.max_input_length * self.args.sampling_rate)
             audio_array = audio_array[:max_samples]
             
-            self.processor.tokenizer.set_prefix_tokens(language=self.language)
-            input_features = self.processor.feature_extractor(
+            self.processor.tokenizer.set_prefix_tokens(language=self.language, 
+                                                       task="transcribe", 
+                                                       predict_timestamps=self.args.timestamp)
+            example['input_features'] = self.processor.feature_extractor(
                 audio_array,
                 sampling_rate=self.args.sampling_rate,
                 return_tensors="pt",
             ).input_features[0]
 
             target_text = example["target"]
-            if not self.args.timestamp and self.args.do_lower_case:
-                target_text = target_text.lower()        
-            
+            if isinstance(target_text, list):
+                target_text = " ".join(target_text)
+                
             if self.args.timestamp:
                 if isinstance(target_text, list):
                     processed_text = ""
@@ -146,33 +194,30 @@ class ChineseTaiwaneseDataset:
                         start_time = segment['start']
                         end_time = segment['end']
                         text = segment['text']
-                        if self.args.do_lower_case:
-                            text = text.lower()    
                         processed_text += f"<|{start_time:.2f}|>{text}<|{end_time:.2f}|>"
                     target_text = processed_text
                 else:
                     audio_length = len(audio_array) / self.args.sampling_rate
                     target_text = f"<|0.00|>{target_text}<|{audio_length:.2f}|>"
 
+            if self.args.do_lower_case:
+                target_text = target_text.lower()   
             # Tokenize the processed text
-            self.processor.tokenizer.predict_timestamps = self.args.timestamp
-
-            labels = self.processor.tokenizer(
+            # self.processor.tokenizer.predict_timestamps = self.args.timestamp
+            example['labels'] = self.processor.tokenizer(
                 target_text,
                 return_tensors="pt",
-            ).input_ids.squeeze()  # Remove batch dimension
-
+                add_special_tokens=True
+            ).input_ids[0]  # decode_with_timestamps Remove batch dimension
             # Check for NaN or infinity values
-            if torch.isnan(input_features).any() or torch.isinf(input_features).any():
+            if torch.isnan(example['input_features']).any() or torch.isinf(example['input_features']).any():
                 raise ValueError("NaN or infinity values detected in input_features")
 
-            if torch.isnan(labels).any() or torch.isinf(labels).any():
+            if torch.isnan(example['labels']).any() or torch.isinf(example['labels']).any():
                 raise ValueError("NaN or infinity values detected in labels")
-
-            return {
-                "input_features": input_features,
-                "labels": labels
-            }
+            example['input_length'] = audio_array.shape[0] / self.args.sampling_rate
+            example['labels_length'] = len(self.processor.tokenizer(target_text, add_special_tokens=True).input_ids)
+            return example
         except Exception as e:
             logger.error(f"Error preprocessing example: {str(e)}")
             return None
@@ -208,3 +253,18 @@ class ChineseTaiwaneseDataset:
             test_dataset = full_dataset.select(range(max_train_samples, total_samples))
         
         return train_dataset, test_dataset
+
+
+def remove_punctuation(text: str or List[str]):
+    punctuation = '!,.;:?、！，。；：？'
+    if isinstance(text, str):
+        text = re.sub(r'[{}]+'.format(punctuation), '', text).strip()
+        return text
+    elif isinstance(text, list):
+        result_text = []
+        for t in text:
+            t = re.sub(r'[{}]+'.format(punctuation), '', t).strip()
+            result_text.append(t)
+        return result_text
+    else:
+        raise Exception(f'不支援該類型{type(text)}')
