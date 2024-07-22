@@ -35,7 +35,7 @@ class ASRProcessor:
         elif model_choice == "Custom (PEFT)":
             model_path = "./whisper-peft-finetuned-zh-tw"
         else:
-            model_path = "openai/whisper-large-v2"
+            model_path = "openai/whisper-small"
         
         logger.info(f"Right now use model : {model_choice}")
 

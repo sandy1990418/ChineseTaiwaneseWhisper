@@ -42,15 +42,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
     per_device_train_batch_size: int = field(
-        default=32, 
+        default=16, 
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=32,
+        default=16,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     gradient_accumulation_steps: int = field(
-        default=8,
+        default=4,
         metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."}
     )
     num_train_epochs: float = field(
@@ -58,7 +58,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Total number of training epochs to perform."}
     )
     warmup_steps: int = field(
-        default=50, 
+        default=100, 
         metadata={"help": "Linear warmup over warmup_steps."}
     )
     warmup_ratio: float = field(
@@ -82,15 +82,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The evaluation strategy to use."}
     )
     save_steps: int = field(
-        default=50,
+        default=500,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=50,
+        default=500,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=50,
+        default=500,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
@@ -98,7 +98,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Limit the total amount of checkpoints."}
     )
     metric_for_best_model: str = field(
-        default="loss",
+        default="eval_loss",
         metadata={"help": "The metric to use to compare two different models."}
     )
     greater_is_better: bool = field(

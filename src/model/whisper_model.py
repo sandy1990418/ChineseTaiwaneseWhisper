@@ -18,15 +18,16 @@ def load_whisper_model(
         if peft_config is None:
             peft_config = {
                 "task_type": TaskType.SEQ_2_SEQ_LM,
-                "r": 8,
+                "r": 16,
                 "lora_alpha": 32,
-                "lora_dropout": 0.1,
+                "lora_dropout": 0.05,
             }
             
-        target_modules = []
-        for id, (name, param) in enumerate(model.named_modules()):
-            if 'model.decoder' in name and ('q_proj' in name or 'v_proj' in name):
-                target_modules.append(name)
+        # target_modules = []
+        # for id, (name, param) in enumerate(model.named_modules()):
+        #     if 'model.decoder' in name and ('q_proj' in name or 'v_proj' in name):
+        #         target_modules.append(name)
+        target_modules = ["q_proj", "v_proj"]  # ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
         peft_config.update({"target_modules": target_modules})
 
         lora_config = LoraConfig(**peft_config)

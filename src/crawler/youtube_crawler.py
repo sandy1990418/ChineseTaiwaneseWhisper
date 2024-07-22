@@ -231,6 +231,38 @@ def append_to_json(segments, json_path):
             json.dump(segments, f, ensure_ascii=False, indent=4)
 
 
+def process_segment(segment, audio, sr, audio_file, split_audio_dir, segments):
+    start_time = float(segment[0]['start'])
+    end_time = float(segment[-1]['start']) + float(segment[-1]['duration'])
+    duration = end_time-start_time
+    
+    start_sample = int(start_time * sr)
+    end_sample = int(end_time * sr)
+    split_audio = audio[start_sample:end_sample]
+    
+    segment_filename = f"{Path(audio_file).stem}_{len(segments):04d}.wav"
+    segment_path = os.path.join(split_audio_dir, segment_filename)
+    sf.write(segment_path, split_audio, sr)
+
+    timestamp = []
+    for sub in segment:
+        sub_time = {
+            "start": float(sub['start']),
+            "end":  float(sub['start']+sub['duration']),
+            "text": sub['text']
+        }
+        timestamp.append(sub_time)
+
+    segments.append({
+        "audio_path": segment_path,
+        "start": start_time,
+        "end": end_time,
+        "duration": duration,
+        "text": " ".join([s['text'].strip() for s in segment]),
+        "timestamp": timestamp
+    })
+
+
 def process_audio_file(audio_file, subtitle_file, output_dir, json_path, max_duration=30):
     """
     Process a single audio file: split it and append segment information to the JSON file.
@@ -253,38 +285,31 @@ def process_audio_file(audio_file, subtitle_file, output_dir, json_path, max_dur
     os.makedirs(split_audio_dir, exist_ok=True)
     
     segments = []
-    
+    current_segment = []
+    current_start = 0
+    # current_end = 0
+        
     for subtitle in subtitles:
         # Skip empty subtitles
         if not subtitle['text'].strip():
             continue
 
         start_time = float(subtitle['start'])
-        end_time = start_time + float(subtitle['duration'])
-        
-        # Ensure the segment is not too long
-        if end_time - start_time > max_duration:
-            end_time = start_time + max_duration
+        duration = float(subtitle['duration'])
+        end_time = start_time + duration
+        if end_time - current_start >= max_duration:
+            if current_segment:
+                process_segment(current_segment[:-1], audio, sr, audio_file, split_audio_dir, segments)
+            current_segment = [subtitle]
+            current_start = start_time
+        else:
+            current_segment.append(subtitle)
+            # current_end = end_time
 
-        # Extract the audio segment
-        start_sample = int(start_time * sr)
-        end_sample = int(end_time * sr)
-        split_audio = audio[start_sample:end_sample]
-        
-        # Save the split audio
-        segment_filename = f"{Path(audio_file).stem}_{len(segments):04d}.wav"
-        segment_path = os.path.join(split_audio_dir, segment_filename)
-        sf.write(segment_path, split_audio, sr)
-        
-        # Add segment info
-        segments.append({
-            "audio_path": segment_path,
-            "start": start_time,
-            "end": end_time,
-            "text": subtitle['text'].strip()
-        })
+    # Process the last segment if it exists
+    if current_segment:
+        process_segment(current_segment, audio, sr, audio_file, split_audio_dir, segments)
 
-    # Only append if there are valid segments
     if segments:
         append_to_json(segments, json_path)
     else:
