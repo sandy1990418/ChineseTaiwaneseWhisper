@@ -111,7 +111,6 @@ class ChineseTaiwaneseDataset:
     def _preprocess_function(self, example):
         try:
             audio = example["audio"]
-            
             if isinstance(audio, dict):
                 audio_array = audio["array"]
                 sampling_rate = audio["sampling_rate"]
@@ -137,7 +136,7 @@ class ChineseTaiwaneseDataset:
             ).input_features[0]
 
             target_text = example["target"]
-            if self.args.do_lower_case:
+            if not self.args.timestamp and self.args.do_lower_case:
                 target_text = target_text.lower()        
             
             if self.args.timestamp:
@@ -147,6 +146,8 @@ class ChineseTaiwaneseDataset:
                         start_time = segment['start']
                         end_time = segment['end']
                         text = segment['text']
+                        if self.args.do_lower_case:
+                            text = text.lower()    
                         processed_text += f"<|{start_time:.2f}|>{text}<|{end_time:.2f}|>"
                     target_text = processed_text
                 else:

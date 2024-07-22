@@ -232,6 +232,10 @@ def append_to_json(segments, json_path):
 
 
 def process_segment(segment, audio, sr, audio_file, split_audio_dir, segments):
+    if not segment:
+        logger.warning(f"Empty segment encountered for {audio_file}. Skipping this segment.")
+        return
+
     start_time = float(segment[0]['start'])
     end_time = float(segment[-1]['start']) + float(segment[-1]['duration'])
     duration = end_time-start_time
