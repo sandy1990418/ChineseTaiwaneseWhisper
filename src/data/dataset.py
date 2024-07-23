@@ -1,5 +1,13 @@
 import logging
-from datasets import load_dataset, Dataset as HFDataset, concatenate_datasets, interleave_datasets, Audio, Features
+from datasets import (load_dataset, 
+                      Dataset as HFDataset, 
+                      concatenate_datasets, 
+                      interleave_datasets, 
+                      Audio, 
+                      Features, 
+                      Value, 
+                      )
+from functools import partial
 from transformers import WhisperProcessor
 from src.config import DataArguments, DatasetAttr
 import librosa
@@ -107,7 +115,7 @@ class ChineseTaiwaneseDataset:
             input_columns=["input_length"]
         )
         combined_dataset = combined_dataset.filter(
-            is_audio_in_length_range,        
+            filter_labels,        
             input_columns=["labels_length"]
         )
         return combined_dataset
@@ -144,10 +152,44 @@ class ChineseTaiwaneseDataset:
             dataset = dataset.cast_column("audio", Audio(sampling_rate=target_sampling_rate))
         
         # Ensure all datasets have the same feature structure
+        # target_features = Features({
+        #     'audio': Audio(sampling_rate=target_sampling_rate),
+        #     'target': Value('string'),  # dataset.features["target"]
+        # })
+        def adjust_target_to_list(data, language):
+            if language:
+                data["language"] = language
+            else:
+                raise ValueError("You should provide language for dataset")
+
+            if isinstance(data["target"], str):
+                if not self.args.timestamp:
+                    data["target"] = [{"start": 0.0, "end": 0.0, "text": data["target"]}]
+                else:
+                    data["target"] = [{"start": 0.0, 
+                                       "end": float(round(librosa.get_duration(path=data['audio']['path']), 2)), 
+                                       "text": data["target"]}]
+                
+            elif isinstance(data["target"], list):
+                data["target"] = [{"start": float(target["start"]), 
+                                   "end": float(target["end"]), "text": target["text"]} for target in data["target"]]
+            else:
+                raise ValueError(f"Only support `target` type of [list, str] but get {type(data['target'])}")
+            return data
+        
+        dataset = dataset.map(partial(adjust_target_to_list, **{"language": dataset_attr.language}),
+                              num_proc=self.args.preprocessing_num_workers,
+                              desc="Running preprocessor on dataset", 
+                              load_from_cache_file=not self.args.overwrite_cache
+                              )
+        
         target_features = Features({
             'audio': Audio(sampling_rate=target_sampling_rate),
-            'target': dataset.features["target"],
-        })
+            'target': [{'end': Value(dtype='float64', id=None), 
+                        'start': Value(dtype='float64', id=None), 
+                        'text': Value(dtype='string', id=None)}]
+            })
+        
         columns_to_remove = [col for col in dataset.column_names if col not in ["audio", "target"]]
         dataset = dataset.map(remove_columns=columns_to_remove)
         dataset = dataset.cast(target_features)
@@ -162,7 +204,6 @@ class ChineseTaiwaneseDataset:
                 sampling_rate = audio["sampling_rate"]    
             else:
                 raise ValueError(f"Unexpected audio type: {type(audio)}")
-
             # elif isinstance(audio, str):
             #     # If audio is a file path, load it
             #     audio_array, sampling_rate = librosa.load(audio, sr=self.args.sampling_rate)
@@ -170,9 +211,9 @@ class ChineseTaiwaneseDataset:
             if sampling_rate != self.args.sampling_rate:
                 audio_array = librosa.resample(audio_array, orig_sr=sampling_rate, target_sr=self.args.sampling_rate)
 
-            # Ensure audio doesn't exceed max_input_length
-            max_samples = int(self.args.max_input_length * self.args.sampling_rate)
-            audio_array = audio_array[:max_samples]
+            # # Ensure audio doesn't exceed max_input_length
+            # max_samples = int(self.args.max_input_length * self.args.sampling_rate)
+            # audio_array = audio_array[:max_samples]
             
             self.processor.tokenizer.set_prefix_tokens(language=self.language, 
                                                        task="transcribe", 
@@ -184,9 +225,8 @@ class ChineseTaiwaneseDataset:
             ).input_features[0]
 
             target_text = example["target"]
-            if isinstance(target_text, list):
+            if not self.args.timestamp and isinstance(target_text, list):
                 target_text = " ".join(target_text)
-                
             if self.args.timestamp:
                 if isinstance(target_text, list):
                     processed_text = ""
@@ -217,7 +257,13 @@ class ChineseTaiwaneseDataset:
                 raise ValueError("NaN or infinity values detected in labels")
             example['input_length'] = audio_array.shape[0] / self.args.sampling_rate
             example['labels_length'] = len(self.processor.tokenizer(target_text, add_special_tokens=True).input_ids)
-            return example
+            
+            return {
+                "input_features": example["input_features"],
+                "labels": example["labels"],
+                "input_length": example["input_length"],
+                "labels_length": example["labels_length"],
+                }
         except Exception as e:
             logger.error(f"Error preprocessing example: {str(e)}")
             return None
