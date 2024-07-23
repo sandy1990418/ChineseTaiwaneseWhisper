@@ -15,3 +15,9 @@ yt-dlp
 youtube-transcript-api
 pydub
 fasttext
+# for fastapi
+uvicorn
+python-multipart
+python-dotenv
+fastapi
+evaluate

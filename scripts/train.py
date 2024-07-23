@@ -55,7 +55,8 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        processor=processor
+        processor=processor,
+        resume_from_checkpoint=True
     )
 
     trainer.train()
