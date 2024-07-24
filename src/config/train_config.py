@@ -26,11 +26,11 @@ class ModelArguments:
         metadata={"help": "LoRA attention dimension"}
     )
     lora_alpha: int = field(
-        default=32,
+        default=16,
         metadata={"help": "LoRA alpha"}
     )
     lora_dropout: float = field(
-        default=0.1,
+        default=0.05,
         metadata={"help": "LoRA dropout"}
     )
 
@@ -41,12 +41,16 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default="./whisper-finetuned",
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
+    # auto_find_batch_size_size: bool = field(
+    #     default=True, 
+    #     metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
+    # )
     per_device_train_batch_size: int = field(
-        default=16, 
+        default=8, 
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=16,
+        default=8,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     gradient_accumulation_steps: int = field(
@@ -82,15 +86,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The evaluation strategy to use."}
     )
     save_steps: int = field(
-        default=500,
+        default=100,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=500,
+        default=100,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=500,
+        default=100,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
@@ -139,7 +143,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "max_grad_norm."}
     )
     eval_accumulation_steps: int = field(
-        default=2,
+        default=1,
         metadata={"help": "Number of updates steps to accumulate before performing \
             a backward/update pass in evaluation."}
     )
@@ -150,6 +154,10 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     )
     remove_unused_columns: bool = field(
         default=False,
+        metadata={"help": "Whether or not to automatically remove the columns unused by the model forward method."}
+    )
+    label_names: str = field(
+        default="labels",
         metadata={"help": "Whether or not to automatically remove the columns unused by the model forward method."}
     )
 

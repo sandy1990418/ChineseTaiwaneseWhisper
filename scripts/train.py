@@ -5,6 +5,7 @@ from src.model.whisper_model import load_whisper_model
 from src.data.dataset import ChineseTaiwaneseDataset  
 from src.data.data_collator import WhisperDataCollator
 from src.trainers.whisper_trainer import get_trainer
+import torch 
 # from peft import LoraConfig, TaskType
 
 
@@ -27,20 +28,23 @@ def main():
                 "r": model_args.lora_r,
                 "lora_alpha": model_args.lora_alpha,
                 "lora_dropout": model_args.lora_dropout,
+                "bias": "none"
             }
         else:
             raise ValueError(f"Unsupported PEFT method: {model_args.peft_method}")
-        
+
+    compute_dtype = torch.float16 if training_args.fp16 else torch.float32
     model, processor = load_whisper_model(
         model_args.model_name_or_path, 
         use_peft=model_args.use_peft,
         peft_config=peft_config,
-        language=model_args.language
+        language=model_args.language,
+        compute_dtype=compute_dtype
     )
 
     # processor.tokenizer.model_max_length = model.config.max_length
-    model.config.forced_decoder_ids = None
-    model.config.suppress_tokens = []
+    # model.config.forced_decoder_ids = None
+    # model.config.suppress_tokens = []
     train_dataset, eval_dataset = ChineseTaiwaneseDataset.create_train_and_test_datasets(
         data_args, 
         processor, 
@@ -56,7 +60,6 @@ def main():
         eval_dataset=eval_dataset,
         data_collator=data_collator,
         processor=processor,
-        resume_from_checkpoint=True
     )
 
     trainer.train()

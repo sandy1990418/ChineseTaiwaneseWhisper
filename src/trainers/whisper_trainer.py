@@ -1,5 +1,7 @@
-from transformers import Seq2SeqTrainer
+from transformers import Seq2SeqTrainer, TrainingArguments, TrainerCallback, TrainerState, TrainerControl
 import evaluate
+import os 
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 
 wer_metric = evaluate.load("wer")
 
@@ -13,17 +15,39 @@ wer_metric = evaluate.load("wer")
 #         return (loss, outputs) if return_outputs else loss
 
 
+class SavePeftModelCallback(TrainerCallback):
+    def on_save(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        checkpoint_folder = os.path.join(args.output_dir, f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}")
+
+        peft_model_path = os.path.join(checkpoint_folder, "adapter_model")
+        kwargs["model"].save_pretrained(peft_model_path)
+
+        pytorch_model_path = os.path.join(checkpoint_folder, "pytorch_model.bin")
+        if os.path.exists(pytorch_model_path):
+            os.remove(pytorch_model_path)
+        return control
+
+
 def get_trainer(model, args, train_dataset, eval_dataset, data_collator, processor):
+
+    def make_inputs_require_grad(module, input, output):
+        output.requires_grad_(True)
+    model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
     # Enable gradient checkpointing
     model.gradient_checkpointing_enable()
-    
     # Disable caching
     model.config.use_cache = False
-    
+
     # # Verify that parameters require gradients
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            param.requires_grad = True
+    # for name, param in model.named_parameters():
+    #     if not param.requires_grad:
+    #         param.requires_grad = True
     #         print(f"Warning: {name} does not require gradients")
 
     # # Print total number of trainable parameters
@@ -39,12 +63,14 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
         # we do not want to group tokens when computing the metrics
         label_str = processor.tokenizer.batch_decode(pred.label_ids, skip_special_tokens=True)
 
-        pred_str = [model.tokenizer._normalize(pred) for pred in pred_str]
-        label_str = [model.tokenizer._normalize(label) for label in label_str]
-        # filtering step to only evaluate the samples that correspond to non-zero references:
-        pred_str = [pred_str[i] for i in range(len(pred_str)) if len(label_str[i]) > 0]
-        label_str = [label_str[i] for i in range(len(label_str)) if len(label_str[i]) > 0]
+        # pred_str = [model.tokenizer._normalize(pred) for pred in pred_str]
+        # label_str = [model.tokenizer._normalize(label) for label in label_str]
+        # # filtering step to only evaluate the samples that correspond to non-zero references:
+        # pred_str = [pred_str[i] for i in range(len(pred_str)) if len(label_str[i]) > 0]
+        # label_str = [label_str[i] for i in range(len(label_str)) if len(label_str[i]) > 0]
 
+        # we do not want to group tokens when computing the metrics
+        
         wer = 100 * wer_metric.compute(predictions=pred_str, references=label_str)
 
         return {"wer": wer}
@@ -55,6 +81,9 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        compute_metrics=compute_metrics,
+        # compute_metrics=compute_metrics,
         tokenizer=processor.feature_extractor,
+        callbacks=[SavePeftModelCallback],
     )
+
+    

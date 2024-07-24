@@ -97,7 +97,7 @@ class ChineseTaiwaneseDataset:
         combined_dataset = combined_dataset.shuffle(seed=42)
 
         if self.split == 'test':
-            combined_dataset = combined_dataset.select(range(1000))
+            combined_dataset = combined_dataset.select(range(100))
         
         # columns_to_remove = [col for col in combined_dataset.column_names if col not in ["input_features", "labels"]]
         column_names = list(next(iter(combined_dataset)).keys())
