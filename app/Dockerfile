@@ -2,22 +2,15 @@
 
 FROM  pytorch/pytorch:2.1.1-cuda12.1-cudnn8-devel
 
-WORKDIR /app
+WORKDIR /ChineseTaiwaneseWhisper
 
 # RUN DEBIAN_FRONTEND=noninteractive apt install -y tzdata
 # Base system tools
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get -yqq install tzdata
-# Set build arguments
-# ARG DEBIAN_FRONTEND=noninteractive
-# ARG TZ=Etc/UTC
-
-# Set environment variables
-# ENV TZ=${TZ}
-
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     ffmpeg \
     git \
@@ -28,16 +21,18 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install -r requirements.txt
+RUN pip install  --no-cache-dir  -r requirements.txt
 
 # Copy project files
-COPY . /app
+COPY . /ChineseTaiwaneseWhisper
 COPY src ./src
-COPY app/.env .
+COPY app/.env ./app
 COPY scripts ./scripts
+COPY app/main.py .
 
 # Expose port
 EXPOSE 8000
 
 # Run FastAPI application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["echo", "$HOME"]

@@ -45,3 +45,8 @@ log*
 output*
 flagged*
 youtube_data*
+asr_transcription_streaming_cache*
+checkpoint*
+tests*
+whisper-peft-finetuned-zh-tw*
+whisper.cpp*
