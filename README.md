@@ -342,6 +342,28 @@ By following this format, you ensure that your dataset is compatible with the Ch
 
 <br>
 
+## 🌐 FastAPI Usage
+
+Launch the FastAPI server for batch transcription:
+
+Access the API at `http://0.0.0.0:8000` (default URL).
+
+
+1. For development mode:
+
+For detailed API documentation, visit `http://localhost:8000/docs` when the server is running.
+
+```bash
+fastapi dev api_main.py
+```
+
+2. For production mode:
+```bash
+fastapi run api_main.py
+```
+
+<br>
+
 ## 📄 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
