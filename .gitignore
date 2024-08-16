@@ -16,3 +16,8 @@ api_key
 log*
 checkpoint*
 .env
+*.wav
+whisper/
+whisper.cpp/
+*docker*
+ggml/
