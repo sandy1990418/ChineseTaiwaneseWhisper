@@ -52,6 +52,7 @@ COPY --from=builder /root/.local /root/.local
 COPY ../src/ ./src/
 COPY ../scripts/ ./scripts/
 COPY ../api_main.py .
+COPY ../app/start.sh .
 
 # Set PATH to include user-installed Python packages
 ENV PATH=/usr/bin/:$PATH
@@ -67,4 +68,9 @@ EXPOSE 8000
 
 
 # Run the FastAPI server
-CMD ["python", "-m", "fastapi", "run", "api_main.py", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["python", "-m", "fastapi", "run", "api_main.py", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn main:app --host 0.0.0.0 --port 80"]
+RUN chmod +x start.sh
+
+# Use the startup script
+CMD ["./start.sh"]

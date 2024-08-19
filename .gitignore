@@ -21,4 +21,4 @@ whisper/
 whisper.cpp/
 *docker*
 ggml/
-app/docker.sh
+app/docker_temp.sh
