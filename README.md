@@ -362,6 +362,12 @@ fastapi dev api_main.py
 fastapi run api_main.py
 ```
 
+3. Using Docker Container
+```bash
+bash app/docker.sh
+curl -k http://0.0.0.0:8000/docs  
+```
+
 <br>
 
 ## 📄 License

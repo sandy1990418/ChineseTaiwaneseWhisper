@@ -19,6 +19,6 @@ checkpoint*
 *.wav
 whisper/
 whisper.cpp/
-*docker*
 ggml/
 app/docker_temp.sh
+.dockerignore
