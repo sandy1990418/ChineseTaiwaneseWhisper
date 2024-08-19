@@ -21,3 +21,4 @@ whisper/
 whisper.cpp/
 *docker*
 ggml/
+app/docker.sh
