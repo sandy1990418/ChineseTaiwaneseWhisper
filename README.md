@@ -360,20 +360,11 @@ The API will be accessible at `http://0.0.0.0:8000` by default.
 
 ### 🐳 Using Docker
 
-1. Build the Docker image:
+1. Build and start the Docker container:
    ```bash
-   docker build -t chinese-taiwanese-whisper:latest -f app/Dockerfile .
+   bash app/docker.sh
    ```
 
-2. Run the Docker container:
-   ```bash
-   docker run -d -it --privileged=true --name whisperdocker -p 8000:8000 --gpus all chinese-taiwanese-whisper:latest
-   ```
-
-3. Check if the container is running:
-   ```bash
-   docker ps
-   ```
 ### 🔍 API Documentation
 
 Access the Swagger UI documentation at `http://localhost:8000/docs` when the server is running.
