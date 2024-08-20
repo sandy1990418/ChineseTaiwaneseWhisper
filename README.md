@@ -344,29 +344,70 @@ By following this format, you ensure that your dataset is compatible with the Ch
 
 ## 🌐 FastAPI Usage
 
-Launch the FastAPI server for batch transcription:
+### 🚀 Launching the API
 
-Access the API at `http://0.0.0.0:8000` (default URL).
+1. Development Mode:
+   ```bash
+   fastapi dev api_main.py
+   ```
 
+2. Production Mode:
+   ```bash
+   fastapi run api_main.py
+   ```
 
-1. For development mode:
+The API will be accessible at `http://0.0.0.0:8000` by default.
 
-For detailed API documentation, visit `http://localhost:8000/docs` when the server is running.
+### 🐳 Using Docker
 
-```bash
-fastapi dev api_main.py
-```
+1. Build the Docker image:
+   ```bash
+   docker build -t chinese-taiwanese-whisper:latest -f app/Dockerfile .
+   ```
 
-2. For production mode:
-```bash
-fastapi run api_main.py
-```
+2. Run the Docker container:
+   ```bash
+   docker run -d -it --privileged=true --name whisperdocker -p 8000:8000 --gpus all chinese-taiwanese-whisper:latest
+   ```
 
-3. Using Docker Container
-```bash
-bash app/docker.sh
-curl -k http://0.0.0.0:8000/docs  
-```
+3. Check if the container is running:
+   ```bash
+   docker ps
+   ```
+### 🔍 API Documentation
+
+Access the Swagger UI documentation at `http://localhost:8000/docs` when the server is running.
+
+### 🛠️ Using curl to Interact with the API
+
+1. Health Check:
+   ```bash
+   curl -k http://localhost:8000/health
+   ```
+
+2. Transcribe Audio:
+   ```bash
+   curl -k -X POST -H "Content-Type: multipart/form-data" -F "file=@/path/to/your/audio/file.wav" http://localhost:8000/transcribe
+   ```
+   Replace `/path/to/your/audio/file.wav` with the actual path to your audio file.
+
+3. List All Transcriptions:
+   ```bash
+   curl -k http://localhost:8000/transcriptions
+   ```
+
+4. Get a Specific Transcription:
+   ```bash
+   curl -k http://localhost:8000/transcription/{transcription_id}
+   ```
+   Replace `{transcription_id}` with the actual UUID of the transcription.
+
+5. Delete a Transcription:
+   ```bash
+   curl -k -X DELETE http://localhost:8000/transcription/{transcription_id}
+   ```
+   Replace `{transcription_id}` with the UUID of the transcription you want to delete.
+
 
 <br>
 
