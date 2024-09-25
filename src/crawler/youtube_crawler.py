@@ -7,7 +7,6 @@ from tqdm import tqdm
 import soundfile as sf
 from pathlib import Path
 
-# import pandas as pd
 import subprocess
 import logging
 from datasets import Dataset, IterableDataset
@@ -33,6 +32,12 @@ logger = logging.getLogger(__name__)
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB in bytes
 INITIAL_CHUNK_DURATION = 10 * 60 * 1000  # 10 minutes in milliseconds
 
+# TODO:
+# 1. single audio file
+# 2. single url
+# 3. strcture adjust
+# 4. test example
+
 
 class YoutubeCrawler:
     def __init__(self, args: CrawlerArgs):
@@ -49,14 +54,14 @@ class YoutubeCrawler:
         json_path = os.path.join(
             self.output_dir, self.file_prefix, f"{self.args.dataset_name}.json"
         )
-
         if self.args.playlist_urls:
             logger.info(f"Processing YouTube playlists: {self.args.playlist_urls}")
             for play_idx, playlist_url in enumerate(self.args.playlist_urls):
                 self._process_youtube_playlist(play_idx, playlist_url, json_path)
+
         if self.args.audio_dir:
             logger.info(f"Processing existing audio files from: {self.args.audio_dir}")
-            self._process_audio_file(json_path)
+            self._process_audio_file(self.audio_dir, self.subtitle_dir, json_path)
 
         logger.info(f"All segments saved to: {json_path}")
 
@@ -146,6 +151,7 @@ class YoutubeCrawler:
             subprocess.run(
                 [
                     "ffmpeg",
+                    "-y",
                     "-i",
                     str(audio_file),
                     "-acodec",
@@ -251,16 +257,17 @@ class YoutubeCrawler:
             logger.info("Download successful!")
             return audio_file
 
-    def _process_audio_file(
-        self, audio_file: Path, subtitle_file: Path, json_path: Path
-    ):
-        if not subtitle_file.exists():
+    def _process_audio_file(self, audio_file: str, subtitle_file: str, json_path: str):
+        if not Path(subtitle_file).exists():
             logger.warning(
                 f"Subtitle file not found for {audio_file}. Skipping this audio file."
             )
             return
 
         audio, sr = librosa.load(audio_file, sr=None, mono=True)
+
+        split_audio_dir = os.path.join(self.output_dir, self.file_prefix, "split_audio")
+        os.makedirs(split_audio_dir, exist_ok=True)
 
         with open(subtitle_file, "r", encoding="utf-8") as f:
             subtitles = json.load(f)
@@ -276,10 +283,16 @@ class YoutubeCrawler:
             start_time = float(subtitle["start"])
             duration = float(subtitle["duration"])
             end_time = start_time + duration
+
             if end_time - current_start >= self.max_duration:
                 if current_segment:
                     self._process_segment(
-                        current_segment[:-1], audio, sr, audio_file, segments
+                        current_segment[:-1],
+                        audio,
+                        sr,
+                        audio_file,
+                        split_audio_dir,
+                        segments,
                     )
                 current_segment = [subtitle]
                 current_start = start_time
@@ -287,8 +300,9 @@ class YoutubeCrawler:
                 current_segment.append(subtitle)
 
         if current_segment:
-            self._process_segment(current_segment, audio, sr, audio_file, segments)
-
+            self._process_segment(
+                current_segment, audio, sr, audio_file, split_audio_dir, segments
+            )
         if segments:
             self._append_to_json(segments, json_path)
         else:
@@ -296,7 +310,9 @@ class YoutubeCrawler:
                 f"No valid segments found for {audio_file}. Skipping this audio file."
             )
 
-    def _process_segment(self, segment, audio, sr, audio_file, segments):
+    def _process_segment(
+        self, segment, audio, sr, audio_file, split_audio_dir, segments
+    ):
         if not segment:
             logger.warning(
                 f"Empty segment encountered for {audio_file}. Skipping this segment."
@@ -312,7 +328,8 @@ class YoutubeCrawler:
         split_audio = audio[start_sample:end_sample]
 
         segment_filename = f"{audio_file.stem}_{len(segments):04d}.wav"
-        segment_path = self.output_dir / "split_audio" / segment_filename
+        segment_path = os.path.join(split_audio_dir, segment_filename)
+        # os.makedirs(os.path.dirname(segment_path), exist_ok=True)
         sf.write(segment_path, split_audio, sr)
 
         timestamp = [
@@ -334,8 +351,7 @@ class YoutubeCrawler:
                 "timestamp": timestamp,
             }
         )
-    # TODO: some bug here
-    
+
     def process_and_transcribe_audio(
         self, video_info: Dict[str, str], audio_file: str
     ) -> Dict[str, Any]:
@@ -387,15 +403,6 @@ class YoutubeCrawler:
                     for segment in transcripts
                 ],
             }
-
-            json_file = os.path.join(
-                self.output_dir,
-                f"{video_info['channel_title']}_{video_info['video_title']}_transcript.json",
-            )
-            with open(json_file, "w", encoding="utf-8") as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-
-            logger.info(f"OpenAI transcript saved to {json_file}")
             return result
 
         except Exception as e:
@@ -404,7 +411,7 @@ class YoutubeCrawler:
 
     @staticmethod
     def _append_to_json(segments, json_path):
-        if json_path.exists():
+        if Path(json_path).exists():
             with open(json_path, "r+", encoding="utf-8") as f:
                 data = json.load(f)
                 data.extend(segments)
@@ -460,11 +467,10 @@ class YoutubeCrawler:
         """Create a Hugging Face dataset from a JSON file."""
         with open(json_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         return Dataset.from_dict(
             {
                 "client_id": [
-                    f"{os.path.basename(item['audio_path'])}_{i}"
+                    f"{os.path.basename(item['audio_path'])}"
                     for i, item in enumerate(data)
                 ],
                 "path": [item["audio_path"] for item in data],
@@ -511,18 +517,6 @@ def main():
     args = parser.parse_args_into_dataclasses()[0]
     crawler = YoutubeCrawler(args)
     crawler.crawl()
-
-    # Process and create dataset
-    json_path = os.path.join(
-        args.output_dir, args.file_prefix, f"{args.dataset_name}.json"
-    )
-    dataset = crawler.process_and_create_dataset(json_path)
-
-    # Save the dataset
-    output_file = os.path.join(
-        args.output_dir, args.file_prefix, f"{args.dataset_name}_processed.json"
-    )
-    crawler.save_dataset(dataset, output_file)
 
 
 if __name__ == "__main__":
