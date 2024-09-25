@@ -6,9 +6,9 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from tqdm import tqdm
 import soundfile as sf
 from pathlib import Path
+
 # import pandas as pd
 import subprocess
-import sys
 import logging
 from datasets import Dataset, IterableDataset
 from src.config import CrawlerArgs
@@ -17,55 +17,189 @@ from transformers import HfArgumentParser
 import numpy as np
 from collections import defaultdict
 import gc
+import requests
+from typing import Optional, Tuple, Dict, Any
+from dotenv import load_dotenv
+from pydub import AudioSegment
+import openai
 
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB in bytes
+INITIAL_CHUNK_DURATION = 10 * 60 * 1000  # 10 minutes in milliseconds
 
-def check_ffmpeg(ffmpeg_path=None):
-    """Check if FFmpeg is installed and accessible."""
-    try:
-        if ffmpeg_path:
-            subprocess.run(
-                [ffmpeg_path, "-version"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+
+class YoutubeCrawler:
+    def __init__(self, args: CrawlerArgs):
+        self.args = args
+        self.output_dir = args.output_dir
+        self.ffmpeg_path = args.ffmpeg_path
+        self.file_prefix = args.file_prefix
+        self.batch_size = args.batch_size
+        self.max_duration = args.max_duration
+
+    def crawl(self):
+        self._check_ffmpeg()
+        self._create_output_dirs()
+        json_path = os.path.join(
+            self.output_dir, self.file_prefix, f"{self.args.dataset_name}.json"
+        )
+
+        if self.args.playlist_urls:
+            logger.info(f"Processing YouTube playlists: {self.args.playlist_urls}")
+            for play_idx, playlist_url in enumerate(self.args.playlist_urls):
+                self._process_youtube_playlist(play_idx, playlist_url, json_path)
+        if self.args.audio_dir:
+            logger.info(f"Processing existing audio files from: {self.args.audio_dir}")
+            self._process_audio_file(json_path)
+
+        logger.info(f"All segments saved to: {json_path}")
+
+    def _check_ffmpeg(self, ffmpeg_path=None):
+        """Check if FFmpeg is installed and accessible."""
+        try:
+            if ffmpeg_path:
+                subprocess.run(
+                    [ffmpeg_path, "-version"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                subprocess.run(
+                    ["ffmpeg", "-version"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            return True
+        except FileNotFoundError:
+            return False
+
+    def _create_output_dirs(self):
+        self.audio_dir = os.path.join(self.output_dir, self.file_prefix, "audio")
+        self.subtitle_dir = os.path.join(self.output_dir, self.file_prefix, "subtitles")
+        os.makedirs(self.audio_dir, exist_ok=True)
+        os.makedirs(self.subtitle_dir, exist_ok=True)
+
+    def _extract_playlist_id(self, url: str) -> Optional[str]:
+        playlist_id_match = re.search(r"(?:list=)([a-zA-Z0-9_-]+)", url)
+        return playlist_id_match.group(1) if playlist_id_match else None
+
+    def _process_youtube_playlist(self, play_idx, playlist_url, json_path):
+        """Crawl videos in a YouTube playlist in batches."""
+
+        playlist_id = self._extract_playlist_id(playlist_url)
+
+        if not playlist_id:
+            logger.error(f"Invalid playlist URL: {playlist_url}")
+            return [], []
+
+        ydl_opts = {
+            "extract_flat": True,
+            "quiet": True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            playlist_dict = ydl.extract_info(
+                f"https://www.youtube.com/playlist?list={playlist_id}", download=False
             )
-        else:
-            subprocess.run(
-                ["ffmpeg", "-version"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+
+        for index, video in enumerate(playlist_dict["entries"]):
+            video_id = video["id"]
+            logger.info(f"Processing video: {video_id}")
+            result = self._download_youtube_audio_and_subtitles(
+                video_id, play_idx, index
             )
-        return True
-    except FileNotFoundError:
-        return False
+            if result:
+                audio_file, subtitle_file = result
+                self._process_audio_file(audio_file, subtitle_file, json_path)
 
+            if index + 1 >= self.batch_size:
+                logger.info(f"Reached batch size limit of {self.batch_size}. Stopping.")
+                break
 
-def extract_playlist_id(url):
-    """Extract playlist ID from a YouTube playlist URL."""
-    playlist_id_match = re.search(r"(?:list=)([a-zA-Z0-9_-]+)", url)
-    return playlist_id_match.group(1) if playlist_id_match else None
+    def _download_youtube_audio_and_subtitles(
+        self, video_id: str, play_idx: int, file_index: int
+    ) -> Optional[Tuple[Path, Path]]:
+        file_name = f"{self.file_prefix}_{play_idx:04d}_{file_index:04d}"
+        audio_file = Path(os.path.join(self.audio_dir, f"{file_name}.mp3"))
+        subtitle_file = Path(os.path.join(self.subtitle_dir, f"{file_name}.json"))
 
+        if not audio_file.exists():
+            try:
+                audio_file = self._download_audio_with_yt_dlp(video_id, audio_file)
+            except yt_dlp.utils.DownloadError:
+                try:
+                    audio_file = self._download_audio_with_cobalt(video_id, audio_file)
+                except Exception as e:
+                    logger.error(
+                        f"Error downloading audio for video {video_id} using Cobalt API: {e}"
+                    )
+                    return None
+        # Convert mp3 to wav if needed
+        wav_file = audio_file.with_suffix(".wav")
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-i",
+                    str(audio_file),
+                    "-acodec",
+                    "pcm_s16le",
+                    "-ar",
+                    "16000",
+                    str(wav_file),
+                ],
+                check=True,
+            )
+            audio_file = wav_file
+            os.remove(
+                str(audio_file.with_suffix(".mp3"))
+            )  # Remove the original mp3 file
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error converting mp3 to wav: {e}")
+            return None
 
-def download_youtube_audio_and_subtitles(
-    video_id, output_dir, ffmpeg_path=None, file_prefix="", play_idx=0, file_index=0
-):
-    """Download YouTube audio and subtitles for a given video ID."""
-    audio_dir = os.path.join(output_dir, "audio")
-    subtitle_dir = os.path.join(output_dir, "subtitles")
-    os.makedirs(audio_dir, exist_ok=True)
-    os.makedirs(subtitle_dir, exist_ok=True)
+        if not subtitle_file.exists():
+            try:
+                transcript = YouTubeTranscriptApi.get_transcript(
+                    video_id, languages=["zh-TW", "zh-CN", "zh"]
+                )
+                with open(subtitle_file, "w", encoding="utf-8") as f:
+                    json.dump(transcript, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.error(f"Error getting transcript for video {video_id}: {e}")
+                logger.info(
+                    f"Attempting to transcribe audio using OpenAI API for video {video_id}"
+                )
+                video_info = {
+                    "video_id": video_id,
+                    "video_title": f"video_{video_id}",
+                    "channel_title": "unknown_channel",
+                }
+                transcription_result = self.process_and_transcribe_audio(
+                    video_info, str(audio_file)
+                )
+                if "error" not in transcription_result:
+                    with open(subtitle_file, "w", encoding="utf-8") as f:
+                        json.dump(
+                            transcription_result["transcript"],
+                            f,
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                else:
+                    logger.error(
+                        f"Failed to transcribe audio for video {video_id}: {transcription_result['error']}"
+                    )
+                    return None
+        return audio_file, subtitle_file
 
-    file_name = f"{file_prefix}_{play_idx:04d}_{file_index:04d}"
-    audio_file = os.path.join(audio_dir, f"{file_name}")
-    subtitle_file = os.path.join(subtitle_dir, f"{file_name}.json")
-
-    # Download audio if it doesn't exist
-    if not os.path.exists(audio_file):
+    def _download_audio_with_yt_dlp(self, video_id: str, audio_file: Path) -> Path:
         ydl_opts = {
             "format": "bestaudio/best",
             "postprocessors": [
@@ -77,367 +211,319 @@ def download_youtube_audio_and_subtitles(
             ],
             "outtmpl": audio_file,
         }
-        if ffmpeg_path:
-            ydl_opts["ffmpeg_location"] = ffmpeg_path
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-        except yt_dlp.utils.DownloadError as e:
-            logger.error(f"Error downloading audio for video {video_id}: {e}")
-            return None
+        if self.ffmpeg_path:
+            ydl_opts["ffmpeg_location"] = self.ffmpeg_path
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
+        logger.info(f"Download successful! {audio_file}")
+        return audio_file
 
-    # Get subtitles if they don't exist
-    if not os.path.exists(subtitle_file):
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(
-                video_id, languages=["zh-TW", "zh-CN", "zh"]
-            )
-            with open(subtitle_file, "w", encoding="utf-8") as f:
-                json.dump(transcript, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Error getting transcript for video {video_id}: {e}")
-            return None
+    def _download_audio_with_cobalt(self, video_id: str, audio_file: Path) -> Path:
+        # Thanks to Cobalt! Your work is truly great.
+        # https://github.com/imputnet/cobalt
+        logger.info("Initiating download using Cobalt API.")
 
-    return audio_file, subtitle_file
-
-
-def crawl_youtube_playlist(
-    playlist_url, play_idx, output_dir, ffmpeg_path=None, file_prefix="", batch_size=20
-):
-    """Crawl videos in a YouTube playlist in batches."""
-    playlist_id = extract_playlist_id(playlist_url)
-    if not playlist_id:
-        logger.error(f"Invalid playlist URL: {playlist_url}")
-        return [], []
-
-    ydl_opts = {
-        "extract_flat": True,
-        "quiet": True,
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        playlist_dict = ydl.extract_info(
-            f"https://www.youtube.com/playlist?list={playlist_id}", download=False
-        )
-
-    all_audio_files = []
-    all_subtitle_files = []
-    batch_audio_files = []
-    batch_subtitle_files = []
-
-    for index, video in enumerate(playlist_dict["entries"]):
-        video_id = video["id"]
-        logger.info(f"Processing video: {video_id}")
-        result = download_youtube_audio_and_subtitles(
-            video_id, output_dir, ffmpeg_path, file_prefix, play_idx, index
-        )
-        if result:
-            audio_file, subtitle_file = result
-            batch_audio_files.append(audio_file)
-            batch_subtitle_files.append(subtitle_file)
-
-        if (
-            len(batch_audio_files) == batch_size
-            or index == len(playlist_dict["entries"]) - 1
-        ):
-            all_audio_files.extend(batch_audio_files)
-            all_subtitle_files.extend(batch_subtitle_files)
-            yield batch_audio_files, batch_subtitle_files
-            batch_audio_files = []
-            batch_subtitle_files = []
-
-
-# def create_dataset(audio_files, subtitle_files):
-#     """Create a Hugging Face dataset from a batch of files."""
-#     data = []
-#     for audio_file, subtitle_file in zip(audio_files, subtitle_files):
-#         with open(subtitle_file, "r", encoding="utf-8") as f:
-#             subtitle = json.load(f)
-#         text = " ".join([entry["text"] for entry in subtitle])
-#         data.append({"audio": f"{audio_file}.wav", "sentence": text})
-
-#     df = pd.DataFrame(data)
-#     return Dataset.from_pandas(df)
-
-# def slice_audio(audio: np.ndarray, start: float, duration: float, sampling_rate: int) -> np.ndarray:
-#     """Slice audio array based on start time and duration."""
-#     start_sample = int(start * sampling_rate)
-#     end_sample = int((start + duration) * sampling_rate)
-#     return audio[start_sample:end_sample]
-
-
-def create_dataset(audio_files, subtitle_files):
-    """Create a Hugging Face dataset from a batch of files."""
-
-    def generate_dataset_format():
-        for audio_file, subtitle_file in zip(audio_files, subtitle_files):
-            # Load audio file
-            audio_array, sampling_rate = librosa.load(
-                f"{audio_file}.wav", sr=None, mono=True, dtype=np.float32
-            )
-            # audio_array, sampling_rate = sf.read(f"{audio_file}.wav")
-
-            # Read subtitle file
-            with open(subtitle_file, "r", encoding="utf-8") as f:
-                subtitle = json.load(f)
-
-            # Process each subtitle entry
-            for entry_idx, entry in enumerate(subtitle):
-                file_name = os.path.basename(audio_file)
-                # sliced_audio = slice_audio(audio_array, entry["start"], entry["duration"], sampling_rate)
-                yield {
-                    "client_id": f"{file_name}_{entry_idx}",
-                    "path": f"{audio_file}.wav",
-                    # "audio": {
-                    #     "path": f"{audio_file}.wav",
-                    #     "array": sliced_audio,
-                    #     "sampling_rate": sampling_rate
-                    # },
-                    "sentence": entry["text"],
-                    "start": entry["start"],
-                    "end": entry["start"] + entry["duration"],
-                    "duration": entry["duration"],
-                }
-            del audio_array
-            gc.collect()
-        # Create the dataset
-
-    return IterableDataset.from_generator(generate_dataset_format)
-
-
-def iterable_to_dataset(iterable_dataset):
-    """Convert an IterableDataset to a regular Dataset."""
-    data_dict = defaultdict(list)
-    for item in iterable_dataset:
-        for key, value in item.items():
-            data_dict[key].append(value)
-    return Dataset.from_dict(data_dict)
-
-
-def append_to_json(segments, json_path):
-    """
-    Append segments to a single JSON file.
-    If the file doesn't exist, it creates a new one.
-    """
-    if os.path.exists(json_path):
-        with open(json_path, "r+", encoding="utf-8") as f:
-            data = json.load(f)
-            data.extend(segments)
-            f.seek(0)
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.truncate()
-    else:
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(segments, f, ensure_ascii=False, indent=4)
-
-
-def process_segment(segment, audio, sr, audio_file, split_audio_dir, segments):
-    if not segment:
-        logger.warning(f"Empty segment encountered for {audio_file}. Skipping this segment.")
-        return
-
-    start_time = float(segment[0]['start'])
-    end_time = float(segment[-1]['start']) + float(segment[-1]['duration'])
-    duration = end_time-start_time
-    
-    start_sample = int(start_time * sr)
-    end_sample = int(end_time * sr)
-    split_audio = audio[start_sample:end_sample]
-    
-    segment_filename = f"{Path(audio_file).stem}_{len(segments):04d}.wav"
-    segment_path = os.path.join(split_audio_dir, segment_filename)
-    sf.write(segment_path, split_audio, sr)
-
-    timestamp = []
-    for sub in segment:
-        sub_time = {
-            "start": float(sub['start']),
-            "end":  float(sub['start']+sub['duration']),
-            "text": sub['text']
+        url = "https://olly.imput.net/api/json"
+        params = {
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "isAudioOnly": True,
         }
-        timestamp.append(sub_time)
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
 
-    segments.append({
-        "audio_path": segment_path,
-        "start": start_time,
-        "end": end_time,
-        "duration": duration,
-        "text": " ".join([s['text'].strip() for s in segment]),
-        "timestamp": timestamp
-    })
+        # Make the API request
+        response = requests.post(url, json=params, headers=headers)
 
+        if response.status_code == 200:
+            result = response.json()
+            download_url = result["url"]
+            # Step 2: Download the audio content from the stream
+            logger.info("Start to stream download using Cobalt API.")
+            with requests.get(download_url, stream=True) as stream_response:
+                stream_response.raise_for_status()
+                os.makedirs(self.audio_dir, exist_ok=True)
+                with open(audio_file, "wb") as file:
+                    for chunk in stream_response.iter_content(chunk_size=8192):
+                        file.write(chunk)
 
-def process_audio_file(audio_file, subtitle_file, output_dir, json_path, max_duration=30):
-    """
-    Process a single audio file: split it and append segment information to the JSON file.
-    Only process if the subtitle file exists and skip empty segments.
-    """
-    # Check if subtitle file exists
-    if not subtitle_file or not os.path.exists(subtitle_file):
-        logger.warning(f"Subtitle file not found for {audio_file}. Skipping this audio file.")
-        return
+            logger.info("Download successful!")
+            return audio_file
 
-    # Load the audio file
-    audio, sr = librosa.load(audio_file, sr=None, mono=True)
-    
-    # Load subtitle data
-    with open(subtitle_file, 'r', encoding='utf-8') as f:
-        subtitles = json.load(f)
-    
-    # Create output directories
-    split_audio_dir = os.path.join(output_dir, "split_audio")
-    os.makedirs(split_audio_dir, exist_ok=True)
-    
-    segments = []
-    current_segment = []
-    current_start = 0
-    # current_end = 0
-        
-    for subtitle in subtitles:
-        # Skip empty subtitles
-        if not subtitle['text'].strip():
-            continue
+    def _process_audio_file(
+        self, audio_file: Path, subtitle_file: Path, json_path: Path
+    ):
+        if not subtitle_file.exists():
+            logger.warning(
+                f"Subtitle file not found for {audio_file}. Skipping this audio file."
+            )
+            return
 
-        start_time = float(subtitle['start'])
-        duration = float(subtitle['duration'])
-        end_time = start_time + duration
-        if end_time - current_start >= max_duration:
-            if current_segment:
-                process_segment(current_segment[:-1], audio, sr, audio_file, split_audio_dir, segments)
-            current_segment = [subtitle]
-            current_start = start_time
+        audio, sr = librosa.load(audio_file, sr=None, mono=True)
+
+        with open(subtitle_file, "r", encoding="utf-8") as f:
+            subtitles = json.load(f)
+
+        segments = []
+        current_segment = []
+        current_start = 0
+
+        for subtitle in subtitles:
+            if not subtitle["text"].strip():
+                continue
+
+            start_time = float(subtitle["start"])
+            duration = float(subtitle["duration"])
+            end_time = start_time + duration
+            if end_time - current_start >= self.max_duration:
+                if current_segment:
+                    self._process_segment(
+                        current_segment[:-1], audio, sr, audio_file, segments
+                    )
+                current_segment = [subtitle]
+                current_start = start_time
+            else:
+                current_segment.append(subtitle)
+
+        if current_segment:
+            self._process_segment(current_segment, audio, sr, audio_file, segments)
+
+        if segments:
+            self._append_to_json(segments, json_path)
         else:
-            current_segment.append(subtitle)
-            # current_end = end_time
+            logger.warning(
+                f"No valid segments found for {audio_file}. Skipping this audio file."
+            )
 
-    # Process the last segment if it exists
-    if current_segment:
-        process_segment(current_segment, audio, sr, audio_file, split_audio_dir, segments)
+    def _process_segment(self, segment, audio, sr, audio_file, segments):
+        if not segment:
+            logger.warning(
+                f"Empty segment encountered for {audio_file}. Skipping this segment."
+            )
+            return
 
-    if segments:
-        append_to_json(segments, json_path)
-    else:
-        logger.warning(f"No valid segments found for {audio_file}. Skipping this audio file.")
-        
+        start_time = float(segment[0]["start"])
+        end_time = float(segment[-1]["start"]) + float(segment[-1]["duration"])
+        duration = end_time - start_time
 
-def create_dataset_from_json(json_file):
-    """Create a Hugging Face dataset from a JSON file."""
-    with open(json_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        start_sample = int(start_time * sr)
+        end_sample = int(end_time * sr)
+        split_audio = audio[start_sample:end_sample]
 
-    return Dataset.from_dict(
-        {
-            "client_id": [
-                f"{os.path.basename(item['audio_path'])}_{i}"
-                for i, item in enumerate(data)
-            ],
-            "path": [item["audio_path"] for item in data],
-            "sentence": [item["text"] for item in data],
-            "start": [item["start"] for item in data],
-            "end": [item["end"] for item in data],
-            "duration": [item["end"] - item["start"] for item in data],
-        }
-    )
+        segment_filename = f"{audio_file.stem}_{len(segments):04d}.wav"
+        segment_path = self.output_dir / "split_audio" / segment_filename
+        sf.write(segment_path, split_audio, sr)
 
-
-def convert_dataset_to_json(dataset, output_file):
-    """Convert a Hugging Face dataset to a JSON file that can be read by load_dataset."""
-    data = []
-    for item in tqdm(dataset, desc="Converting dataset to JSON"):
-        data.append(
+        timestamp = [
             {
-                "client_id": item["client_id"],
-                "path": item["path"],
-                "sentence": item["sentence"],
-                "start": item["start"],
-                "end": item["end"],
-                "duration": item["duration"],
+                "start": float(sub["start"]),
+                "end": float(sub["start"] + sub["duration"]),
+                "text": sub["text"],
+            }
+            for sub in segment
+        ]
+
+        segments.append(
+            {
+                "audio_path": str(segment_path),
+                "start": start_time,
+                "end": end_time,
+                "duration": duration,
+                "text": " ".join([s["text"].strip() for s in segment]),
+                "timestamp": timestamp,
+            }
+        )
+    # TODO: some bug here
+    
+    def process_and_transcribe_audio(
+        self, video_info: Dict[str, str], audio_file: str
+    ) -> Dict[str, Any]:
+        self.client = openai.OpenAI()
+        try:
+            audio = AudioSegment.from_wav(audio_file)
+            transcripts = []
+            start = 0
+
+            while start < len(audio):
+                end = min(start + INITIAL_CHUNK_DURATION, len(audio))
+
+                while True:
+                    chunk = audio[start:end]
+                    chunk_file = os.path.join(self.output_dir, "temp_chunk.mp3")
+                    chunk.export(chunk_file, format="mp3", bitrate="64k")
+
+                    if os.path.getsize(chunk_file) <= MAX_FILE_SIZE:
+                        break
+
+                    end = start + (end - start) // 2
+                    os.remove(chunk_file)
+
+                    if end - start < 1000:  # Minimum 1 second chunk
+                        raise ValueError("Unable to create a small enough chunk")
+
+                with open(chunk_file, "rb") as audio_chunk:
+                    response = self.client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_chunk,
+                        response_format="verbose_json",
+                    )
+
+                transcripts.extend(response.segments)
+                os.remove(chunk_file)
+
+                start = end
+
+            result = {
+                "video_id": video_info["video_id"],
+                "video_title": video_info["video_title"],
+                "channel_title": video_info["channel_title"],
+                "transcript": [
+                    {
+                        "text": segment["text"],
+                        "start": segment["start"],
+                        "duration": segment["end"] - segment["start"],
+                    }
+                    for segment in transcripts
+                ],
+            }
+
+            json_file = os.path.join(
+                self.output_dir,
+                f"{video_info['channel_title']}_{video_info['video_title']}_transcript.json",
+            )
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"OpenAI transcript saved to {json_file}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {e}")
+            return {"video_id": video_info["video_id"], "error": str(e)}
+
+    @staticmethod
+    def _append_to_json(segments, json_path):
+        if json_path.exists():
+            with open(json_path, "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                data.extend(segments)
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.truncate()
+        else:
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(segments, f, ensure_ascii=False, indent=4)
+
+    def create_dataset(self, audio_files, subtitle_files):
+        """Create a Hugging Face dataset from a batch of files."""
+        return IterableDataset.from_generator(
+            self._generate_dataset_format(audio_files, subtitle_files)
+        )
+
+    def _generate_dataset_format(self, audio_files, subtitle_files):
+        def generator():
+            for audio_file, subtitle_file in zip(audio_files, subtitle_files):
+                audio_array, sampling_rate = librosa.load(
+                    f"{audio_file}.wav", sr=None, mono=True, dtype=np.float32
+                )
+
+                with open(subtitle_file, "r", encoding="utf-8") as f:
+                    subtitle = json.load(f)
+
+                for entry_idx, entry in enumerate(subtitle):
+                    file_name = os.path.basename(audio_file)
+                    yield {
+                        "client_id": f"{file_name}_{entry_idx}",
+                        "path": f"{audio_file}.wav",
+                        "sentence": entry["text"],
+                        "start": entry["start"],
+                        "end": entry["start"] + entry["duration"],
+                        "duration": entry["duration"],
+                    }
+                del audio_array
+                gc.collect()
+
+        return generator
+
+    @staticmethod
+    def iterable_to_dataset(iterable_dataset):
+        """Convert an IterableDataset to a regular Dataset."""
+        data_dict = defaultdict(list)
+        for item in iterable_dataset:
+            for key, value in item.items():
+                data_dict[key].append(value)
+        return Dataset.from_dict(data_dict)
+
+    @staticmethod
+    def create_dataset_from_json(json_file):
+        """Create a Hugging Face dataset from a JSON file."""
+        with open(json_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        return Dataset.from_dict(
+            {
+                "client_id": [
+                    f"{os.path.basename(item['audio_path'])}_{i}"
+                    for i, item in enumerate(data)
+                ],
+                "path": [item["audio_path"] for item in data],
+                "sentence": [item["text"] for item in data],
+                "start": [item["start"] for item in data],
+                "end": [item["end"] for item in data],
+                "duration": [item["end"] - item["start"] for item in data],
             }
         )
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    @staticmethod
+    def convert_dataset_to_json(dataset, output_file):
+        """Convert a Hugging Face dataset to a JSON file that can be read by load_dataset."""
+        data = []
+        for item in tqdm(dataset, desc="Converting dataset to JSON"):
+            data.append(
+                {
+                    "client_id": item["client_id"],
+                    "path": item["path"],
+                    "sentence": item["sentence"],
+                    "start": item["start"],
+                    "end": item["end"],
+                    "duration": item["duration"],
+                }
+            )
 
-    logger.info(f"Dataset saved as JSON: {output_file}")
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Dataset saved as JSON: {output_file}")
+
+    def process_and_create_dataset(self, json_path):
+        """Process the crawled data and create a dataset."""
+        dataset = self.create_dataset_from_json(json_path)
+        return dataset
+
+    def save_dataset(self, dataset, output_file):
+        """Save the dataset to a JSON file."""
+        self.convert_dataset_to_json(dataset, output_file)
 
 
-def parse_args():
+def main():
     parser = HfArgumentParser(CrawlerArgs)
     args = parser.parse_args_into_dataclasses()[0]
-    return args
+    crawler = YoutubeCrawler(args)
+    crawler.crawl()
 
+    # Process and create dataset
+    json_path = os.path.join(
+        args.output_dir, args.file_prefix, f"{args.dataset_name}.json"
+    )
+    dataset = crawler.process_and_create_dataset(json_path)
 
-def main(args):
-    if not args.output_dir:
-        logger.error("Output directory must be specified.")
-        sys.exit(1)
-
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    if not check_ffmpeg(args.ffmpeg_path):
-        logger.error("Error: FFmpeg is not installed or not in the system PATH.")
-        logger.error(
-            "Please install FFmpeg and make sure it's accessible from the command line."
-        )
-        logger.error("You can download FFmpeg from: https://ffmpeg.org/download.html")
-        logger.error(
-            "After installation, you may need to restart your terminal or computer."
-        )
-        logger.error(
-            "Alternatively, you can specify the path to FFmpeg using the --ffmpeg_path argument."
-        )
-        sys.exit(1)
-
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    json_path = os.path.join(args.output_dir, f"{args.dataset_name}.json")
-
-    if args.playlist_urls:
-        # Process YouTube playlists
-        for play_idx, playlist_url in enumerate(args.playlist_urls):
-            logger.info(f"Processing playlist: {playlist_url}")
-            for batch_num, (batch_audio_files, batch_subtitle_files) in enumerate(
-                crawl_youtube_playlist(
-                    playlist_url,
-                    play_idx,
-                    args.output_dir,
-                    args.ffmpeg_path,
-                    args.file_prefix,
-                    args.batch_size,
-                )
-            ):
-                logger.info(f"Processing batch {batch_num + 1}")
-
-                # Process and split audio files
-                for audio_file, subtitle_file in zip(
-                    batch_audio_files, batch_subtitle_files
-                ):
-                    process_audio_file(
-                        f"{audio_file}.wav", subtitle_file, args.output_dir, json_path
-                    )
-
-    if args.audio_dir:
-        # Process existing audio files
-        audio_files = [
-            os.path.join(args.audio_dir, f)
-            for f in os.listdir(args.audio_dir)
-            if f.endswith(".wav")
-        ]
-        subtitle_files = [
-            os.path.join(os.path.dirname(args.audio_dir), "subtitles", f.replace(".wav", ".json"))
-            for f in os.listdir(args.audio_dir)
-            if f.endswith(".wav")
-        ]
-        for audio_file, subtitle_file in tqdm(
-            zip(audio_files, subtitle_files),
-            total=len(audio_files),
-            desc="Processing audio files",
-        ):
-            process_audio_file(audio_file, subtitle_file, args.output_dir, json_path)
-
-    logger.info(f"All segments saved to: {json_path}")
+    # Save the dataset
+    output_file = os.path.join(
+        args.output_dir, args.file_prefix, f"{args.dataset_name}_processed.json"
+    )
+    crawler.save_dataset(dataset, output_file)
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    main()
