@@ -21,3 +21,7 @@ python-multipart
 python-dotenv
 fastapi
 evaluate
+colorlog
+requests
+openai
+pytube

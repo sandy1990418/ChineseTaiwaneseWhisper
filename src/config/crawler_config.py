@@ -43,3 +43,7 @@ class CrawlerArgs:
         default=20,
         metadata={"help": "Prefix for audio and subtitle files"}
     )
+    max_duration: float = field(
+        default=30.0,
+        metadata={"help": "Maximum duration of audio to download"}
+    )
