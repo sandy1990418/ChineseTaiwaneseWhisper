@@ -22,3 +22,5 @@ whisper.cpp/
 ggml/
 app/docker_temp.sh
 .dockerignore
+*temp.py
+nohup*
