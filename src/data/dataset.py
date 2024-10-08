@@ -68,9 +68,8 @@ class ChineseTaiwaneseDataset:
             batched=False,
             load_from_cache_file=not self.args.overwrite_cache,
         )
-
-        combined_dataset = self._apply_filters(combined_dataset)
-        return combined_dataset
+        dataset = self._apply_filters(dataset)
+        return dataset
 
     def _apply_filters(self, dataset: HFDataset):
         dataset = dataset.filter(

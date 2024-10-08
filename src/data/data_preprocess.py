@@ -85,7 +85,7 @@ class TextPreprocessor(PreporcessorStrategy):
                 0
             ]  # decode_with_timestamps Remove batch dimension
 
-            dataset["labels_length"] = len(
+            dataset["label_length"] = len(
                 processor.tokenizer(target_text, add_special_tokens=True).input_ids
             )
         except Exception as e:
@@ -172,5 +172,5 @@ class PreprocessingPipeline(PipelineStrategy):
             "input_features": dataset["input_features"],
             "labels": dataset["labels"],
             "input_length": dataset["input_length"],
-            "labels_length": dataset["labels_length"],
+            "label_length": dataset["label_length"],
         }
