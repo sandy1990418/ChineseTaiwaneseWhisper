@@ -2,10 +2,7 @@ from openai import OpenAI
 from typing import List, Dict, Optional, Any
 import json
 import os 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.utils.logging import logger
 
 
 def read_transcript_json(file_path: str) -> List[Dict]:

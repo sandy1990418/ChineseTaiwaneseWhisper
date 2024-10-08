@@ -1,12 +1,10 @@
-from transformers import WhisperForConditionalGeneration, WhisperProcessor
+# from transformers import WhisperForConditionalGeneration, WhisperProcessor
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 from peft import get_peft_model, LoraConfig, TaskType
 from typing import Any, Optional, List
-import torch 
+import torch
 from transformers.modeling_utils import PreTrainedModel
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.utils.logging import logger
 
 
 def prepare_model_for_training(
@@ -24,7 +22,9 @@ def prepare_model_for_training(
     """
     logger.info("prepare_model_for_training")
     for name, param in model.named_parameters():
-        if param.ndim == 1 and any(layer_norm_name in name for layer_norm_name in layer_norm_names):
+        if param.ndim == 1 and any(
+            layer_norm_name in name for layer_norm_name in layer_norm_names
+        ):
             param.data = param.data.to(torch.float32)
 
     if use_gradient_checkpointing:
@@ -38,7 +38,9 @@ def prepare_model_for_training(
             model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
         model.gradient_checkpointing_enable()
-        model.config.use_cache = False  # turn off when gradient checkpointing is enabled
+        model.config.use_cache = (
+            False  # turn off when gradient checkpointing is enabled
+        )
 
     logger.info("CastOutputToFloat")
     if hasattr(model, output_layer_name):
@@ -54,14 +56,16 @@ def prepare_model_for_training(
 
 
 def load_whisper_model(
-        model_name_or_path: str, 
-        use_peft: bool = False, 
-        peft_config: dict = None, 
-        language: str = "chinese",
-        compute_dtype: Any = None,
-        ):
-    model = WhisperForConditionalGeneration.from_pretrained(model_name_or_path)  # , torch_dtype=compute_dtype,
-    processor = WhisperProcessor.from_pretrained(model_name_or_path)
+    model_name_or_path: str,
+    use_peft: bool = False,
+    peft_config: dict = None,
+    language: str = "chinese",
+    compute_dtype: Any = None,
+):
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        model_name_or_path
+    )  # , torch_dtype=compute_dtype,
+    processor = AutoProcessor.from_pretrained(model_name_or_path)
 
     # Set the language token
     processor.tokenizer.set_prefix_tokens(language=language, task="transcribe")
@@ -82,17 +86,20 @@ def load_whisper_model(
                 "lora_alpha": 32,
                 "lora_dropout": 0.05,
             }
-            
+
         # target_modules = []
         # for id, (name, param) in enumerate(model.named_modules()):
         #     if 'model.decoder' in name and ('q_proj' in name or 'v_proj' in name):
         #         target_modules.append(name)
-        target_modules = ["q_proj", "v_proj"]  # ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
+        target_modules = [
+            "q_proj",
+            "v_proj",
+        ]  # ["k_proj", "q_proj", "v_proj", "out_proj", "fc1", "fc2"]
         peft_config.update({"target_modules": target_modules})
 
         lora_config = LoraConfig(**peft_config)
         model = prepare_model_for_training(model)
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
-    
+
     return model, processor

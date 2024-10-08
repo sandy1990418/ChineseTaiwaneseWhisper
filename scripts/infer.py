@@ -3,13 +3,10 @@ import numpy as np
 from typing import Dict, List
 import soundfile as sf
 from src.inference.flexible_inference import ChineseTaiwaneseASRInference
-import logging
+from src.utils.logging import logger
 import os
 import json
 from src.config import InferenceArguments
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def load_audio(file_path):
@@ -42,7 +39,7 @@ def transcribe_channel(inference, audio: np.ndarray, sample_rate: int, channel_n
             "transcriptions": transcriptions
         }
     except Exception as e:
-        logging.error(f"Error transcribing {channel_name} channel: {str(e)}")
+        logger.error(f"Error transcribing {channel_name} channel: {str(e)}")
         return {
             "channel": channel_name,
             "transcriptions": [],
@@ -100,7 +97,7 @@ def batch_inference(inference,
     """
     results = []
     for file in audio_files:
-        logging.info(f"Processing file: {file}")
+        logger.info(f"Processing file: {file}")
         result = process_audio_file(inference, file)
         results.append(result)
     
@@ -108,9 +105,9 @@ def batch_inference(inference,
         try:
             with open(output_file, 'a+', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=4)
-            logging.info(f"Results written to {output_file}")
+            logger.info(f"Results written to {output_file}")
         except Exception as e:
-            logging.error(f"Error writing results to JSON: {str(e)}")
+            logger.error(f"Error writing results to JSON: {str(e)}")
 
 
 def stream_inference(inference, audio_file):

@@ -6,11 +6,7 @@ from transformers import (
     WhisperTokenizer,
 )
 from peft import PeftModel, PeftConfig
-import logging
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.utils.logging import logger
 
 
 def merge_and_save_whisper_model(base_model_name, peft_model_path, output_dir):

@@ -1,16 +1,11 @@
 from inference import FusionWhisperLLaMAInference
-import logging
+from src.utils.logging import logger
 import librosa
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 
 def main():
     # Initialize the fusion model
-    logging.info("Initializing FusionWhisperLLaMAInference model...")
+    logger.info("Initializing FusionWhisperLLaMAInference model...")
     fusion_model = FusionWhisperLLaMAInference(
         whisper_model_path="openai/whisper-small",
         llama_model_path="taide/Llama3-TAIDE-LX-8B-Chat-Alpha1",
@@ -23,13 +18,13 @@ def main():
 
     # Single audio file transcription
     audio_path = "S00001.wav"
-    logging.info(f"Transcribing single audio file: {audio_path}")
+    logger.info(f"Transcribing single audio file: {audio_path}")
     audio, sr = librosa.load(audio_path, sr=None)
     transcription = fusion_model.transcribe_batch(audio, sr)
-    logging.info(f"Transcription: {transcription}")
+    logger.info(f"Transcription: {transcription}")
 
     # Streaming transcription example
-    logging.info("Starting streaming transcription...")
+    logger.info("Starting streaming transcription...")
 
     def audio_stream_generator(
         audio_path, chunk_size=1600
@@ -40,8 +35,8 @@ def main():
 
     for result in fusion_model.transcribe_stream(audio_stream_generator(audio_path)):
         if result:
-            logging.info(f"Partial transcription: {result['transcription']}")
-            logging.info(f"Speed: {result['speed']:.2f}x real-time")
+            logger.info(f"Partial transcription: {result['transcription']}")
+            logger.info(f"Speed: {result['speed']:.2f}x real-time")
 
 
 if __name__ == "__main__":

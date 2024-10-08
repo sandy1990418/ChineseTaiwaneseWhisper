@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from transformers import WhisperProcessor, WhisperForConditionalGeneration, LlamaTokenizer, LlamaForCausalLM
 from peft import PeftModel, PeftConfig
-import logging
+from src.utils.logging import logger
 from typing import Generator, List
 from collections import deque
 import re
@@ -10,10 +10,6 @@ import tqdm
 import librosa
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class ChineseTaiwaneseASRInference:

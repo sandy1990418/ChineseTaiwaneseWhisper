@@ -9,15 +9,11 @@ import os
 from typing import Optional, List
 from uuid import UUID, uuid4
 from datetime import datetime
-import logging
+from src.utils.logging import logger
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI()
 

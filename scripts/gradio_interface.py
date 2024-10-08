@@ -10,11 +10,8 @@ import json
 from transformers import HfArgumentParser
 from src.config import GradioArguments
 from typing import Optional, Union, Any 
-import logging
+from src.utils.logging import logger
 from summary import summarize_transcript, process_transcripts 
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class ASRProcessor:
@@ -135,7 +132,7 @@ def transcribe_batch(
     try:
         audio_result = convert_audio_sampling(audio)
     except Exception as e:
-        logging.error(f"Error converting audio: {str(e)}")
+        logger.error(f"Error converting audio: {str(e)}")
         return f"Error processing audio: {str(e)}"
 
     channels = ['left', 'right']
