@@ -62,6 +62,8 @@ ENV PYTHONUNBUFFERED=1
 
 # Install FastAPI CLI
 RUN pip install "fastapi[standard]"
+RUN pip install uvicorn
+RUN pip install --upgrade datasets evaluate
 
 # Expose port
 EXPOSE 8000
@@ -70,7 +72,9 @@ EXPOSE 8000
 # Run the FastAPI server
 # CMD ["python", "-m", "fastapi", "run", "api_main.py", "--host", "0.0.0.0", "--port", "8000"]
 # CMD ["uvicorn main:app --host 0.0.0.0 --port 80"]
-RUN chmod +x start.sh
+# RUN chmod +x start.sh
+# CMD ["python", "-m", "fastapi_cli", "run", "api_main.py", "--host", "0.0.0.0", "--port", "8000"]
+# ["./start.sh"]
 
 # Use the startup script
-CMD ["./start.sh"]
+CMD ["python", "-m", "uvicorn", "api_main:app", "--host", "0.0.0.0", "--port", "8000"]

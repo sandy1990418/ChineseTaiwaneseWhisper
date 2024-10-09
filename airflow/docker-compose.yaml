@@ -25,6 +25,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./test_files:/opt/airflow/test_files
   # Uses the AIRFLOW_UID environment variable or default value 50000 as the user ID
   user: "${AIRFLOW_UID:-50000}:0"
   # Defines service dependencies
@@ -189,6 +190,8 @@ services:
     build:
       context: ../
       dockerfile: app/Dockerfile
+    volumes:
+      - ./test_files:/app/test_files 
     ports:
       - "8000:8000"
     healthcheck:
@@ -197,5 +200,10 @@ services:
       timeout: 10s
       retries: 3
 
+networks:
+  airflow:
+    name: airflow_network
+
 volumes:
   postgres-db-volume:
+  test_files:
