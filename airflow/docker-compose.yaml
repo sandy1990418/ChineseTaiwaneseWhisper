@@ -1,0 +1,209 @@
+version: '3'
+
+# Defines a common Airflow configuration that can be reused by multiple services
+x-airflow-common: &airflow-common
+  # Uses the official Airflow 2.10.2 image
+  image: apache/airflow:2.10.2
+  # Defines environment variables
+  environment: &airflow-common-env
+    # Uses CeleryExecutor, allowing tasks to be distributed among multiple workers
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    # Sets the database connection
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    # Sets the Celery result backend
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    # Sets the Celery broker URL
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    # Fernet key for encrypting connection passwords, left empty means a random key will be generated
+    AIRFLOW__CORE__FERNET_KEY: ''
+    # DAGs are not paused when created
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+    # Don't load example DAGs
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  # Mounts volumes to ensure DAGs, logs, and plugins can be persistently stored
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./test_files:/opt/airflow/test_files
+  # Uses the AIRFLOW_UID environment variable or default value 50000 as the user ID
+  user: "${AIRFLOW_UID:-50000}:0"
+  # Defines service dependencies
+  depends_on: &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+services:
+  # PostgreSQL database service
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    # Uses a named volume for persistent data storage
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    # Health check ensures the database is running properly
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  # Redis service, used as Celery's message broker
+  redis:
+    image: redis:latest
+    expose:
+      - 6379
+    # Health check ensures Redis is running properly
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+
+  # Airflow Webserver service
+  airflow-webserver:
+      <<: *airflow-common  # Uses the common Airflow configuration
+      command: webserver
+      ports:
+        - "8080:8080"  # Maps container's 8080 port to host's 8080 port
+      # Health check ensures webserver is running properly
+      healthcheck:
+        test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+        interval: 10s
+        timeout: 10s
+        retries: 5
+      restart: always
+      depends_on:
+        <<: *airflow-common-depends-on
+        airflow-init:
+          condition: service_completed_successfully
+
+  # Airflow Scheduler service
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    # Health check ensures scheduler is running properly
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Airflow Worker service
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    # Health check ensures worker is running properly
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    environment:
+      <<: *airflow-common-env
+      # Required to handle warm shutdown of the celery workers properly
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Airflow Triggerer service
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    # Health check ensures triggerer is running properly
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # Airflow initialization service
+  airflow-init:
+      <<: *airflow-common
+      entrypoint: /bin/bash
+      # Initialization script
+      command:
+        - -c
+        - |
+          set -e
+          export AIRFLOW_HOME=/opt/airflow
+          
+          # Ensure the Airflow user exists
+          if ! id airflow &>/dev/null; then
+            adduser --disabled-password --gecos "" airflow
+          fi
+          
+          chown -R airflow: /opt/airflow
+          
+          # Run initialization commands as the airflow user
+          su airflow -c "
+            airflow db init
+            airflow users create \
+              --username admin \
+              --firstname admin \
+              --lastname admin \
+              --role Admin \
+              --email admin@example.com \
+              --password admin
+          "
+          
+          echo "Airflow initialization complete."
+      environment:
+        <<: *airflow-common-env
+        _AIRFLOW_DB_UPGRADE: 'true'
+        _AIRFLOW_WWW_USER_CREATE: 'true'
+        _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+        _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      user: "0:0"
+      volumes:
+        - .:/sources
+      restart: on-failure
+      depends_on:
+        postgres:
+          condition: service_healthy
+
+  # ASR service (assuming this is a custom Automatic Speech Recognition service)
+  asr-service:
+    build:
+      context: ../
+      dockerfile: app/Dockerfile
+    volumes:
+      - ./test_files:/app/test_files 
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  airflow:
+    name: airflow_network
+
+volumes:
+  postgres-db-volume:
+  test_files:
