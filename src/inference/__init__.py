@@ -1,6 +1,5 @@
-from .flexible_inference import ChineseTaiwaneseASRInference, FusionWhisperLLaMAInference
+from .flexible_inference import ChineseTaiwaneseASRInference
 
 __all__ = [
     'ChineseTaiwaneseASRInference',
-    'FusionWhisperLLaMAInference'
 ]
