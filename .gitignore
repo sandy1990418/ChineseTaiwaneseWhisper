@@ -24,3 +24,5 @@ app/docker_temp.sh
 .dockerignore
 *temp.py
 nohup*
+airflow/*
+!airflow/docker-compose.yaml
