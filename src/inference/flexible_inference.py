@@ -1,6 +1,7 @@
 import torch
 import numpy as np
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
+# from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from peft import PeftModel, PeftConfig
 from src.utils.logging import logger
 from typing import Generator, List
@@ -36,12 +37,12 @@ class ChineseTaiwaneseASRInference:
         try:
             if use_peft:
                 config = PeftConfig.from_pretrained(model_path)
-                self.model = WhisperForConditionalGeneration.from_pretrained(
+                self.model = AutoModelForSpeechSeq2Seq.from_pretrained(
                     config.base_model_name_or_path
                 )
                 self.model = PeftModel.from_pretrained(self.model, model_path)
             else:
-                self.model = WhisperForConditionalGeneration.from_pretrained(model_path)
+                self.model = AutoModelForSpeechSeq2Seq.from_pretrained(model_path)
 
             self.model.to(device)
             # BUG FIX: https://medium.com/@bofenghuang7/what-i-learned-from-whisper-fine-tuning-event-2a68dab1862
@@ -51,7 +52,7 @@ class ChineseTaiwaneseASRInference:
             # to use gradient checkpointing
             self.model.config.use_cache = False
 
-            self.processor = WhisperProcessor.from_pretrained(model_path)
+            self.processor = AutoProcessor.from_pretrained(model_path)
 
             # Set the language token without using forced_decoder_ids
             self.language_token = self.processor.tokenizer.convert_tokens_to_ids(
@@ -84,9 +85,17 @@ class ChineseTaiwaneseASRInference:
                 )
 
                 input_features = inputs.input_features.to(self.device)
+                # Detect Language
+                # https://discuss.huggingface.co/t/language-detection-with-whisper/26003/14
+                language_token = self.model.generate(input_features, max_new_tokens=1)[0, 1]
+                language_token = self.processor.tokenizer.decode(language_token)
+                language_token = re.search(r'<\|(.+?)\|>', language_token).group(1)
+                
+                logger.info(f"The Language Token is {language_token}")
+
                 generated_ids = self.model.generate(
                     input_features,
-                    language=self.language,
+                    language=language_token,  # self.language,
                     task="transcribe",
                     return_timestamps=self.use_timestamps,
                 )
@@ -176,11 +185,16 @@ class ChineseTaiwaneseASRInference:
         ).input_features
 
         input_features = input_features.to(self.device)
+        language_token = self.model.generate(input_features, max_new_tokens=1)[0, 1]
+        language_token = self.processor.tokenizer.decode(language_token)
+        language_token = re.search(r'<\|(.+?)\|>', language_token).group(1)
+        
+        logger.info(f"The Language Token is {language_token}")
 
         generated_ids = self.model.generate(
             input_features,
             forced_decoder_ids=self.forced_decoder_ids,
-            language=self.language,
+            language=language_token,  # self.language,
             return_timestamps=self.use_timestamps,
             task="transcribe",
             num_beams=5,            # Use beam search with 5 beams

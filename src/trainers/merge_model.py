@@ -1,10 +1,11 @@
 import argparse
 import torch
-from transformers import (
-    WhisperForConditionalGeneration,
-    WhisperProcessor,
-    WhisperTokenizer,
-)
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, AutoTokenizer
+# from transformers import (
+#     WhisperForConditionalGeneration,
+#     WhisperProcessor,
+#     WhisperTokenizer,
+# )
 from peft import PeftModel, PeftConfig
 from src.utils.logging import logger
 
@@ -14,7 +15,7 @@ def merge_and_save_whisper_model(base_model_name, peft_model_path, output_dir):
     config = PeftConfig.from_pretrained(peft_model_path)
 
     logger.info("[2/7] Loading base Whisper model")
-    base_model = WhisperForConditionalGeneration.from_pretrained(
+    base_model = AutoModelForSpeechSeq2Seq.from_pretrained(
         base_model_name,
         torch_dtype=torch.float16,
         device_map="auto",
@@ -30,11 +31,11 @@ def merge_and_save_whisper_model(base_model_name, peft_model_path, output_dir):
     model.save_pretrained(output_dir)
 
     logger.info("[6/7] Saving WhisperProcessor")
-    processor = WhisperProcessor.from_pretrained(base_model_name)
+    processor = AutoProcessor.from_pretrained(base_model_name)
     processor.save_pretrained(output_dir)
 
     logger.info("[7/7] Saving WhisperTokenizer")
-    tokenizer = WhisperTokenizer.from_pretrained(base_model_name)
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     tokenizer.save_pretrained(output_dir)
 
     logger.info(f"Merged model, processor, and tokenizer saved to: {output_dir}")
