@@ -58,7 +58,7 @@ ChineseTaiwaneseWhisper/
 ```bash
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
-                        --dataset_name "mozilla-foundation/common_voice_11_0" \
+                        --dataset_name "common_voice_13_train" \
                         --youtube_data_dir "./youtube_data" \
                         --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
@@ -74,7 +74,7 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
                         --use_peft \
                         --peft_method "lora" \
-                        --dataset "common_voice_13_train","youtube_data"  \
+                        --dataset "common_voice_13_train, YOUR_CUSTOM_DATASET"  \
                         --output_dir "Checkpoint_Path" \
                         --num_train_epochs 10  \
                         --per_device_train_batch_size 4 \
