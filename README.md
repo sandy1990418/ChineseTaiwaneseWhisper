@@ -293,6 +293,38 @@ Each item in the dataset represents an audio file and its corresponding transcri
 }
 ```
 
+Use the `dataset_info.json` to determine which dataset you want to use, the structure of `dataset_info.json` is below:
+```python
+{
+    "common_voice_13_train": {
+      "hf_hub_url": "mozilla-foundation/common_voice_13_0",
+      "columns": {
+        "audio": "audio",
+        "target": "sentence",
+        "language": "chinese"
+      },
+      "dataset_kwargs": {
+        "split": "train"
+      },
+      "dataset_args": [
+        "zh-TW"
+      ]
+    },
+   # If you have a custom dataset that you want to train, please use the following format in the dataset_info.json
+   "YOUR_CUSTOM_DATASET": {
+      "file_name": "YOUR_CUSTOM_DATASET.json",
+      "columns": {
+        "audio": "audio_path",
+        "target": "timestamp", # change to `sentence` if you want to train a model without timestamp
+        "language": "YOUR_DATASET_LANGUEGE"  # please check which languages are be used in Huggingface.
+      },
+      "dataset_kwargs": {
+        "split": "train"
+      }
+    },
+}
+```
+
 ### Transcription Format Examples
 
 #### Without Timestamps
