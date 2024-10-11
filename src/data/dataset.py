@@ -60,7 +60,7 @@ class ChineseTaiwaneseDataset:
         self.language = dataset_attr.language
 
         pipeline = self.preprocessing_pipeline(self.args, self.processor, self.language)
-        dataset = dataset.map(
+        combined_dataset = combined_dataset.map(
             pipeline.process,
             remove_columns=column_names,
             num_proc=self.args.preprocessing_num_workers,
@@ -68,8 +68,8 @@ class ChineseTaiwaneseDataset:
             batched=False,
             load_from_cache_file=not self.args.overwrite_cache,
         )
-        dataset = self._apply_filters(dataset)
-        return dataset
+        combined_dataset = self._apply_filters(combined_dataset)
+        return combined_dataset
 
     def _apply_filters(self, dataset: HFDataset):
         dataset = dataset.filter(
@@ -112,7 +112,9 @@ class ChineseTaiwaneseDataset:
         else:
             raise ValueError("Unknown mixing strategy.")
 
-        logger.info(f"Combined dataset features: {combined_dataset.features}")
+        logger.info(f"Combined dataset features: {combined_dataset.features} and \
+                    Combined dataset length: {len(combined_dataset)}")
+        
         combined_dataset = combined_dataset.shuffle(seed=42)
 
         if self.split == "test":
