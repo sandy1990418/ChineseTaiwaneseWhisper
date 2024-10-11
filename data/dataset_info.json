@@ -1,0 +1,30 @@
+{
+    "common_voice_13_train": {
+      "hf_hub_url": "mozilla-foundation/common_voice_13_0",
+      "columns": {
+        "audio": "audio",
+        "target": "sentence",
+        "language": "chinese"
+      },
+      "dataset_kwargs": {
+        "split": "train"
+      },
+      "dataset_args": [
+        "zh-TW"
+      ]
+    },
+    "common_voice_13_test": {
+      "hf_hub_url": "mozilla-foundation/common_voice_13_0",
+      "columns": {
+        "audio": "audio",
+        "target": "sentence",
+        "language": "chinese"
+      },
+      "dataset_kwargs": {
+        "split": "test"
+      },
+      "dataset_args": [
+        "zh-TW"
+      ]
+    }
+}
