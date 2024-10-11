@@ -70,8 +70,8 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
         # label_str = [label_str[i] for i in range(len(label_str)) if len(label_str[i]) > 0]
 
         # we do not want to group tokens when computing the metrics
-        
         wer = 100 * wer_metric.compute(predictions=pred_str, references=label_str)
+        # loss = pred.loss.mean().item() if pred.loss is not None else None
 
         return {"wer": wer}
 
@@ -81,7 +81,7 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        # compute_metrics=compute_metrics,
+        compute_metrics=compute_metrics,
         tokenizer=processor.feature_extractor,
         callbacks=[SavePeftModelCallback],
     )
