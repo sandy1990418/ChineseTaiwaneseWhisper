@@ -95,15 +95,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The saving strategy to use."}
     )
     save_steps: int = field(
-        default=1,
+        default=50,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=1,
+        default=50,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=1,
+        default=50,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
