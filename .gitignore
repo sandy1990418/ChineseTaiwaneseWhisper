@@ -26,3 +26,5 @@ app/docker_temp.sh
 nohup*
 airflow/*
 !airflow/docker-compose.yaml
+mlartifacts/*
+mlruns/*

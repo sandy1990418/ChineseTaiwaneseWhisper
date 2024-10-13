@@ -22,11 +22,11 @@ class ModelArguments:
         metadata={"help": "PEFT method to use: lora, ia3, adaption_prompt, prefix_tuning, p_tuning"}
     )
     lora_r: int = field(
-        default=8,
+        default=16,
         metadata={"help": "LoRA attention dimension"}
     )
     lora_alpha: int = field(
-        default=16,
+        default=64,
         metadata={"help": "LoRA alpha"}
     )
     lora_dropout: float = field(
@@ -51,11 +51,11 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
     #     metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     # )
     per_device_train_batch_size: int = field(
-        default=8, 
+        default=16, 
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=8,
+        default=16,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     gradient_accumulation_steps: int = field(
@@ -75,7 +75,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Linear warmup over warmup_ratio."}
     )
     lr_scheduler_type: str = field(
-        default="cosine", 
+        default="linear", 
         metadata={"help": "lr_scheduler_types."}
     )
     learning_rate: float = field(
@@ -95,15 +95,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "The saving strategy to use."}
     )
     save_steps: int = field(
-        default=100,
+        default=1,
         metadata={"help": "Save checkpoint every X updates steps."}
     )
     eval_steps: int = field(
-        default=100,
+        default=1,
         metadata={"help": "Run an evaluation every X steps."}
     )
     logging_steps: int = field(
-        default=100,
+        default=1,
         metadata={"help": "Log every X updates steps."}
     )
     save_total_limit: Optional[int] = field(
@@ -147,10 +147,10 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default=True,
         metadata={"help": "If True, use predict_with_generate"}
     )    
-    max_grad_norm: float = field(
-        default=1.0, 
-        metadata={"help": "max_grad_norm."}
-    )
+    # max_grad_norm: float = field(
+    #     default=1.0, 
+    #     metadata={"help": "max_grad_norm."}
+    # )
     eval_accumulation_steps: int = field(
         default=1,
         metadata={"help": "Number of updates steps to accumulate before performing \
@@ -207,7 +207,7 @@ class WhisperProcessorConfig:
         metadata={"help": "Whether to predict timestamps."}
     )
     return_timestamps: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "Whether to return timestamps in the decoded output."}
     )
     model_max_length: Optional[int] = field(

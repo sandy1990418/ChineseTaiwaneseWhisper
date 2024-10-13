@@ -71,9 +71,13 @@ def main():
     data_collator = WhisperDataCollator(
         processor=processor,
     )
+    model.config.use_cache = False
+    processor.tokenizer.predict_timestamps = data_args.timestamp
+
     trainer = get_trainer(
         model=model,
         args=training_args,
+        processor_args=procrssor_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,

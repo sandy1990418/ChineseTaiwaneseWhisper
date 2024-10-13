@@ -6,6 +6,22 @@ from transformers import WhisperProcessor
 import librosa
 import torch
 from typing import List, Dict, Any
+import re
+
+
+def remove_punctuation(text: str or List[str]):
+    punctuation = "!,.;:?、！，。；：？"
+    if isinstance(text, str):
+        text = re.sub(r"[{}]+".format(punctuation), "", text).strip()
+        return text
+    elif isinstance(text, list):
+        result_text = []
+        for t in text:
+            t = re.sub(r"[{}]+".format(punctuation), "", t).strip()
+            result_text.append(t)
+        return result_text
+    else:
+        raise Exception(f"Not support this type {type(text)}")
 
 
 class PreporcessorStrategy(ABC):
@@ -68,23 +84,26 @@ class TextPreprocessor(PreporcessorStrategy):
     ) -> HFDataset:
         try:
             target_text = dataset["target"]
-            if not args.timestamp and isinstance(target_text, list):
-                target_text = " ".join(target_text)
-
+            # if not args.timestamp and isinstance(target_text, list):
+            #     target_text = " ".join(target_text)
+            
             if args.timestamp:
+                processor.tokenizer.predict_timestamps = True
                 target_text = self._process_timestamp(target_text, dataset, args)
+            else:
+                processor.tokenizer.predict_timestamps = False
+                target_text = self._process_notimestamp(target_text, dataset, args)                
 
             if args.do_lower_case:
                 target_text = target_text.lower()
-
             # Tokenize the processed text
             # self.processor.tokenizer.predict_timestamps = self.args.timestamp
+            
             dataset["labels"] = processor.tokenizer(
                 target_text, return_tensors="pt", add_special_tokens=True
             ).input_ids[
                 0
             ]  # decode_with_timestamps Remove batch dimension
-
             dataset["label_length"] = len(
                 processor.tokenizer(target_text, add_special_tokens=True).input_ids
             )
@@ -101,13 +120,29 @@ class TextPreprocessor(PreporcessorStrategy):
                 start_time = segment["start"]
                 end_time = segment["end"]
                 text = segment["text"]
+                text = remove_punctuation(text)
                 processed_text += f"<|{start_time:.2f}|>{text}<|{end_time:.2f}|>"
             target_text = processed_text
         else:
             audio = dataset["audio"]
             audio_array = audio["array"]
             audio_length = len(audio_array) / args.sampling_rate
+            target_text = remove_punctuation(target_text)
             target_text = f"<|0.00|>{target_text}<|{audio_length:.2f}|>"
+
+        return target_text
+
+    def _process_notimestamp(self, target_text, dataset, args):
+        if isinstance(target_text, list):
+            processed_text = ""
+            for segment in target_text:
+                text = segment["text"]
+                text = remove_punctuation(text)
+                processed_text += f"{text}"
+            target_text = processed_text
+        else:
+            target_text = remove_punctuation(target_text)
+            target_text = f"{target_text}"
 
         return target_text
 
