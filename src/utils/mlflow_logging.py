@@ -4,6 +4,11 @@ import json
 from abc import ABC, abstractmethod
 from peft import PeftModel
 from src.utils.logging import logger
+import time
+from time import strftime,  localtime
+from typing import Dict
+
+LORA_LIST = ['lora', 'qlora', 'olora']
 
 
 def setup_mlflow():
@@ -12,12 +17,26 @@ def setup_mlflow():
     logger.info(f"MLflow tracking URI set to: {mlflow_tracking_uri}")
 
 
-def get_latest_checkpoint(checkpoint_dir: str) -> str:
-    checkpoints = [d for d in os.listdir(checkpoint_dir) if d.startswith("checkpoint-")]
+def get_latest_checkpoint(base_path: str) -> str:
+    if os.path.exists(os.path.join(base_path, "adapter_config.json")):
+        return base_path
+    checkpoints = [d for d in os.listdir(base_path) if d.startswith("checkpoint-")]
     if not checkpoints:
         return None
     latest_checkpoint = max(checkpoints, key=lambda x: int(x.split("-")[-1]))
-    return os.path.join(checkpoint_dir, latest_checkpoint)
+    return os.path.join(base_path, latest_checkpoint)
+
+
+def extract_metrics_from_trainer_state(trainer_state_path: str) -> Dict[str, float]:
+    with open(trainer_state_path, 'r') as f:
+        trainer_state = json.load(f)
+    
+    if 'log_history' in trainer_state and trainer_state['log_history']:
+        last_log = trainer_state['log_history'][-1]
+        metrics = {k: v for k, v in last_log.items() if isinstance(v, (int, float))}
+        return metrics
+    
+    return {}
 
 
 class MLflowLogger(ABC):
@@ -29,18 +48,21 @@ class MLflowLogger(ABC):
         base_model_name: str,
         model_name: str,
     ):
-        pass
+        raise NotImplementedError("If you want to customize MLflow to track your work, please implement it here.")
 
 
 class WhisperLoRAMLflowLogger(MLflowLogger):
     def log_model(
         self,
-        lora_model: PeftModel,
+        experiment_name: str,
+        # lora_model: PeftModel,
         checkpoint_dir: str,
         base_model_name: str,
-        model_name: str,
+        # model_name: str,
     ):
-        with mlflow.start_run():
+        start_time = time.time()
+        run_name = f"{experiment_name} {strftime('%Y-%m-%d %H:%M:%S', localtime(start_time))}"
+        with mlflow.start_run(run_name=run_name):
             # Log base model name
             mlflow.log_param("base_model_name", base_model_name)
 
@@ -57,13 +79,29 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                     config = json.load(f)
                     mlflow.log_params(config)
 
+            # Extract and log metrics from trainer_state.json
+            trainer_state_path = os.path.join(latest_checkpoint, "trainer_state.json")
+            if os.path.exists(trainer_state_path):
+                metrics = extract_metrics_from_trainer_state(trainer_state_path)
+                mlflow.log_metrics(metrics)
+
             # Log LoRA files
-            artifact_path = "latest_lora_checkpoint"
+            artifact_path = "lora_files"
             lora_files = [
                 "adapter_config.json",
-                "adapter_model.bin",
+                "adapter_model.safetensors",
+                "added_tokens.json",
+                "all_results.json",
+                "merges.txt",
+                "normalizer.json",
+                "preprocessor_config.json",
                 "README.md",
+                "special_tokens_map.json",
+                "tokenizer_config.json",
+                "train_results.json",
+                "trainer_state.json",
                 "training_args.bin",
+                "vocab.json"
             ]
 
             for file in lora_files:
@@ -72,21 +110,21 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                     mlflow.log_artifact(file_path, artifact_path)
 
             # Register model
-            model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
-            registered_model = mlflow.register_model(model_uri, model_name)
+            # model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
+            # registered_model = mlflow.register_model(model_uri, model_name)
 
-            logger.info(
-                f"Latest LoRA checkpoint registered with name: {model_name}, version: {registered_model.version}"
-            )
+            # logger.info(
+            #     f"Latest LoRA checkpoint registered with name: {model_name}, version: {registered_model.version}"
+            # )
 
 
 class MLflowLoggerFactory:
     @staticmethod
-    def get_logger(model_type: str) -> MLflowLogger:
-        if model_type == "whisper_lora":
+    def get_logger(finetune_type: str) -> MLflowLogger:
+        if finetune_type in LORA_LIST:
             return WhisperLoRAMLflowLogger()
         # Add more loggers for different model types if needed
-        raise ValueError(f"Unsupported model type: {model_type}")
+        raise ValueError(f"Unsupported model type: {finetune_type}")
 
 
 def mlflow_logging(experiment_name: str, model_type: str):
@@ -99,26 +137,19 @@ def mlflow_logging(experiment_name: str, model_type: str):
 
                 if (
                     isinstance(result, dict)
-                    and "lora_model" in result
                     and "checkpoint_dir" in result
                     and "base_model_name" in result
                 ):
                     logger = MLflowLoggerFactory.get_logger(model_type)
-                    lora_model = result["lora_model"]
                     checkpoint_dir = result["checkpoint_dir"]
                     base_model_name = result["base_model_name"]
-                    model_name = f"{experiment_name}_{model_type}_model"
+                    # model_name = f"{experiment_name}_{model_type}_model"
 
                     logger.log_model(
-                        lora_model, checkpoint_dir, base_model_name, model_name
+                        experiment_name=experiment_name,
+                        checkpoint_dir=checkpoint_dir, 
+                        base_model_name=base_model_name
                     )
-
-                    # Log other metrics
-                    if "train_metrics" in result:
-                        mlflow.log_metrics(result["train_metrics"])
-                    if "eval_metrics" in result:
-                        mlflow.log_metrics(result["eval_metrics"])
-
                 return result
             else:
                 return func(*args, **kwargs)

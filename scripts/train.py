@@ -12,10 +12,12 @@ from src.data.dataset import ChineseTaiwaneseDataset
 from src.data.data_collator import WhisperDataCollator
 from src.trainers.whisper_trainer import get_trainer
 import torch
+from src.utils.mlflow_logging import mlflow_logging
 
 # from peft import LoraConfig, TaskType
 
 
+@mlflow_logging("Whisper_LoRA_Experiment", "lora")
 def main():
     parser = HfArgumentParser(
         (
@@ -101,6 +103,10 @@ def main():
     # trainer.log_metrics("eval", metrics)
     # trainer.save_metrics("eval", metrics)
     # trainer.save_state()
+    return {
+        'checkpoint_dir': training_args.output_dir,
+        'base_model_name': model_args.model_name_or_path
+    }
 
 
 if __name__ == "__main__":

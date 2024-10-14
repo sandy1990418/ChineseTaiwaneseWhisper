@@ -28,3 +28,4 @@ airflow/*
 !airflow/docker-compose.yaml
 mlartifacts/*
 mlruns/*
+test_mlflow*
