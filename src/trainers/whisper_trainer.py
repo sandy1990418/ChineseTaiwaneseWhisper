@@ -2,6 +2,8 @@ from transformers import Seq2SeqTrainer, TrainingArguments, TrainerCallback, Tra
 import evaluate
 import os 
 from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
+import re
+from typing import List
 
 wer_metric = evaluate.load("wer")
 
@@ -13,6 +15,21 @@ wer_metric = evaluate.load("wer")
 
 #         loss = outputs.loss
 #         return (loss, outputs) if return_outputs else loss
+
+
+def remove_punctuation(text: str or List[str]):
+    punctuation = "!,.;:?、！，。；：？"
+    if isinstance(text, str):
+        text = re.sub(r"[{}]+".format(punctuation), "", text).strip()
+        return text
+    elif isinstance(text, list):
+        result_text = []
+        for t in text:
+            t = re.sub(r"[{}]+".format(punctuation), "", t).strip()
+            result_text.append(t)
+        return result_text
+    else:
+        raise Exception(f"Not support this type {type(text)}")
 
 
 class SavePeftModelCallback(TrainerCallback):
@@ -34,7 +51,7 @@ class SavePeftModelCallback(TrainerCallback):
         return control
 
 
-def get_trainer(model, args, train_dataset, eval_dataset, data_collator, processor):
+def get_trainer(model, args, processor_args, train_dataset, eval_dataset, data_collator, processor):
 
     def make_inputs_require_grad(module, input, output):
         output.requires_grad_(True)
@@ -59,7 +76,9 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
 
         pred.label_ids[pred.label_ids == -100] = processor.tokenizer.pad_token_id
 
-        pred_str = processor.tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        pred_str = processor.tokenizer.batch_decode(pred_ids, 
+                                                    skip_special_tokens=True, 
+                                                    decode_with_timestamps=processor_args.return_timestamps)
         # we do not want to group tokens when computing the metrics
         label_str = processor.tokenizer.batch_decode(pred.label_ids, skip_special_tokens=True)
 
@@ -68,11 +87,10 @@ def get_trainer(model, args, train_dataset, eval_dataset, data_collator, process
         # # filtering step to only evaluate the samples that correspond to non-zero references:
         # pred_str = [pred_str[i] for i in range(len(pred_str)) if len(label_str[i]) > 0]
         # label_str = [label_str[i] for i in range(len(label_str)) if len(label_str[i]) > 0]
-
+        label_str = remove_punctuation(label_str)
         # we do not want to group tokens when computing the metrics
         wer = 100 * wer_metric.compute(predictions=pred_str, references=label_str)
         # loss = pred.loss.mean().item() if pred.loss is not None else None
-
         return {"wer": wer}
 
     return Seq2SeqTrainer(
