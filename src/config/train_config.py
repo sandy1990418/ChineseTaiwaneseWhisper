@@ -55,7 +55,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=16,
+        default=8,
         metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     gradient_accumulation_steps: int = field(
@@ -110,14 +110,15 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         default=-1,
         metadata={"help": "Limit the total amount of checkpoints."}
     )
-    metric_for_best_model: str = field(
-        default="loss",
-        metadata={"help": "The metric to use to compare two different models."}
-    )
-    greater_is_better: bool = field(
-        default=False,
-        metadata={"help": "Whether the `metric_for_best_model` should be maximized or not."}
-    )
+    # https://github.com/huggingface/blog/issues/933
+    # metric_for_best_model: str = field(
+    #     default="loss",
+    #     metadata={"help": "The metric to use to compare two different models."}
+    # )
+    # greater_is_better: bool = field(
+    #     default=False,
+    #     metadata={"help": "Whether the `metric_for_best_model` should be maximized or not."}
+    # )
     load_best_model_at_end: bool = field(
         default=False,
         metadata={"help": "Whether or not to load the best model found during training at the end of training."}
@@ -144,7 +145,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "If True, use dataloader_pin_memory"}
     )    
     predict_with_generate: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "If True, use predict_with_generate"}
     )    
     # max_grad_norm: float = field(
