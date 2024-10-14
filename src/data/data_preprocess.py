@@ -86,19 +86,19 @@ class TextPreprocessor(PreporcessorStrategy):
             target_text = dataset["target"]
             # if not args.timestamp and isinstance(target_text, list):
             #     target_text = " ".join(target_text)
-            
+
             if args.timestamp:
                 processor.tokenizer.predict_timestamps = True
                 target_text = self._process_timestamp(target_text, dataset, args)
             else:
                 processor.tokenizer.predict_timestamps = False
-                target_text = self._process_notimestamp(target_text, dataset, args)                
+                target_text = self._process_notimestamp(target_text, dataset, args)
 
             if args.do_lower_case:
                 target_text = target_text.lower()
             # Tokenize the processed text
             # self.processor.tokenizer.predict_timestamps = self.args.timestamp
-            
+
             dataset["labels"] = processor.tokenizer(
                 target_text, return_tensors="pt", add_special_tokens=True
             ).input_ids[
@@ -117,18 +117,38 @@ class TextPreprocessor(PreporcessorStrategy):
         if isinstance(target_text, list):
             processed_text = ""
             for segment in target_text:
-                start_time = segment["start"]
-                end_time = segment["end"]
+                # Offset
+                start_time = (
+                    segment["start"]
+                    if round(segment["start"] * 100) % 2 == 0
+                    else segment["start"] + 0.01  
+                )
+                end_time = (
+                    segment["end"]
+                    if round(segment["end"] * 100) % 2 == 0
+                    else segment["end"] - 0.01
+                )
                 text = segment["text"]
                 text = remove_punctuation(text)
-                processed_text += f"<|{start_time:.2f}|>{text}<|{end_time:.2f}|>"
+                processed_text += f"<|{start_time:.2f}|>"
+                processed_text += f"{text}"
+                processed_text += f"<|{end_time:.2f}|>"
+                # processed_text += f"<|{start_time:.2f}|>{text}<|{end_time:.2f}|>"
             target_text = processed_text
         else:
             audio = dataset["audio"]
             audio_array = audio["array"]
             audio_length = len(audio_array) / args.sampling_rate
+            audio_length = (
+                audio_length
+                if round(audio_length * 100) % 2 == 0
+                else audio_length - 0.01
+            )
             target_text = remove_punctuation(target_text)
-            target_text = f"<|0.00|>{target_text}<|{audio_length:.2f}|>"
+            # target_text = f"<|0.00|>{target_text}<|{audio_length:.2f}|>"
+            target_text += "<|0.00|>"
+            target_text += f"{text}"
+            target_text += f"<|{audio_length:.2f}|>"
 
         return target_text
 

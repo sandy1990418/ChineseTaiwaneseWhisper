@@ -145,7 +145,7 @@ class WhisperTrainingArguments(Seq2SeqTrainingArguments):
         metadata={"help": "If True, use dataloader_pin_memory"}
     )    
     predict_with_generate: bool = field(
-        default=False,
+        default=True,
         metadata={"help": "If True, use predict_with_generate"}
     )    
     # max_grad_norm: float = field(
