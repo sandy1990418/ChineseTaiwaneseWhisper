@@ -29,3 +29,5 @@ airflow/*
 mlartifacts/*
 mlruns/*
 test_mlflow*
+evaluation_results*
+whisper-*
