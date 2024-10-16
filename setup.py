@@ -1,32 +1,32 @@
 from setuptools import setup, find_packages
 
+# Fetch ReadMe
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+# Use requirements.txt to set the install_requires
+with open("requirements.txt", encoding="utf-8") as f:
+    install_requires = [line.strip() for line in f]
+
+
 setup(
-    name="chinese_taiwanese_whisper_asr",
-    version="0.1.0",
-    packages=find_packages(),
-    install_requires=[
-        "torch>=1.10.0",
-        "torchaudio>=0.10.0",
-        "transformers>=4.25.0",
-        "datasets>=2.6.1",
-        "librosa>=0.9.2",
-        "numpy>=1.21.0",
-        "tqdm>=4.62.3",
-        "peft>=0.3.0",
-        "faster-whisper>=0.5.0",
-        "gradio>=3.20.0",
-        "sentencepiece>=0.1.96",
-    ],
-    author="Your Name",
-    author_email="your.email@example.com",
+    name="ChineseTaiwaneseWhisper",  # noqa: F821
+    author="Sandy Chen",
+    author_email="sandy1990418@gmail.com",
     description="A Chinese/Taiwanese ASR system using Whisper",
-    long_description=open("README.md").read(),
+    long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/chinese-taiwanese-whisper-asr",
+    url="https://github.com/sandy1990418/ChineseTaiwaneseWhisper/tree/master",
+    packages=find_packages(),
+    include_package_data=True,
+    python_requires=">=3.8",
+    install_requires=install_requires,
     classifiers=[
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Development Status :: 3 - Alpha",
     ],
-    python_requires='>=3.7',
 )
