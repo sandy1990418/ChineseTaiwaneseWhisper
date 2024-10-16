@@ -7,6 +7,10 @@ from src.utils.logging import logger
 import time
 from time import strftime,  localtime
 from typing import Dict
+import functools
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path='./.env')
 
 LORA_LIST = ['lora', 'qlora', 'olora']
 
@@ -61,11 +65,12 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
         # model_name: str,
     ):
         start_time = time.time()
-        run_name = f"{experiment_name} {strftime('%Y-%m-%d %H:%M:%S', localtime(start_time))}"
+        run_name = f"{experiment_name}_{strftime('%Y-%m-%d %H:%M:%S', localtime(start_time))}"
+
         with mlflow.start_run(run_name=run_name):
+            logger.info("Log Base model name")
             # Log base model name
             mlflow.log_param("base_model_name", base_model_name)
-
             # Get the latest checkpoint
             latest_checkpoint = get_latest_checkpoint(checkpoint_dir)
             if not latest_checkpoint:
@@ -109,53 +114,53 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                 if os.path.exists(file_path):
                     mlflow.log_artifact(file_path, artifact_path)
 
-            # Register model
-            # model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
-            # registered_model = mlflow.register_model(model_uri, model_name)
+        # Register model
+        # model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
+        # registered_model = mlflow.register_model(model_uri, model_name)
 
-            # logger.info(
-            #     f"Latest LoRA checkpoint registered with name: {model_name}, version: {registered_model.version}"
-            # )
+        # logger.info(
+        #     f"Latest LoRA checkpoint registered with name: {model_name}, version: {registered_model.version}"
+        # )
 
 
 class MLflowLoggerFactory:
     @staticmethod
     def get_logger(finetune_type: str) -> MLflowLogger:
         if finetune_type in LORA_LIST:
-            return WhisperLoRAMLflowLogger()
+            return WhisperLoRAMLflowLogger().log_model
         # Add more loggers for different model types if needed
         raise ValueError(f"Unsupported model type: {finetune_type}")
 
 
 def mlflow_logging(experiment_name: str, model_type: str):
     def decorator(func):
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             if os.getenv("USE_MLFLOW", "false").lower() == "true":
+                result = func(*args, **kwargs)
                 setup_mlflow()
                 mlflow.set_experiment(experiment_name)
-                result = func(*args, **kwargs)
-
+                mllogger = MLflowLoggerFactory.get_logger(model_type)
+                logger.info("Finish Training")
                 if (
                     isinstance(result, dict)
                     and "checkpoint_dir" in result
                     and "base_model_name" in result
-                ):
-                    logger = MLflowLoggerFactory.get_logger(model_type)
+                ):  
                     checkpoint_dir = result["checkpoint_dir"]
                     base_model_name = result["base_model_name"]
                     # model_name = f"{experiment_name}_{model_type}_model"
 
-                    logger.log_model(
+                    mllogger(
                         experiment_name=experiment_name,
                         checkpoint_dir=checkpoint_dir, 
                         base_model_name=base_model_name
                     )
-                return result
+                    return result
             else:
                 return func(*args, **kwargs)
 
         return wrapper
-
     return decorator
 
 
