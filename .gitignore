@@ -31,3 +31,4 @@ mlruns/*
 test_mlflow*
 evaluation_results*
 whisper-*
+nginx/logs*

@@ -17,7 +17,7 @@ load_dotenv()
 
 app = FastAPI()
 
-model_name = "openai/whisper-small"
+model_name = os.getenv("MODEL_PATH", "openai/whisper-small")
 
 # Initialize ASR model
 try:

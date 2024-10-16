@@ -1,0 +1,40 @@
+version: '3'
+
+services:
+  asr-service:
+    build:
+      context: ../
+      dockerfile: app/Dockerfile
+    volumes:
+      - ./audio_files:/app/audio_files 
+    expose:
+      - "8000"
+    environment:
+      - MODEL_PATH=/app/models/asr_model  # Adjust this path as needed
+      - LANGUAGE=chinese
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - asr_network
+
+  nginx:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/var/log/nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - asr-service
+    networks:
+      - asr_network
+
+networks:
+  asr_network:
+    driver: bridge
+
+volumes:
+  nginx_logs:
