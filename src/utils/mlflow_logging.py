@@ -62,6 +62,7 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
         # lora_model: PeftModel,
         checkpoint_dir: str,
         base_model_name: str,
+        data_config: dict
         # model_name: str,
     ):
         start_time = time.time()
@@ -71,6 +72,8 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
             logger.info("Log Base model name")
             # Log base model name
             mlflow.log_param("base_model_name", base_model_name)
+            for key, value in data_config.items():
+                mlflow.log_param(key, value)
             # Get the latest checkpoint
             latest_checkpoint = get_latest_checkpoint(checkpoint_dir)
             if not latest_checkpoint:
@@ -146,15 +149,18 @@ def mlflow_logging(experiment_name: str, model_type: str):
                     isinstance(result, dict)
                     and "checkpoint_dir" in result
                     and "base_model_name" in result
+                    and "data_config" in result
                 ):  
                     checkpoint_dir = result["checkpoint_dir"]
                     base_model_name = result["base_model_name"]
+                    data_config = result['data_config']
                     # model_name = f"{experiment_name}_{model_type}_model"
 
                     mllogger(
                         experiment_name=experiment_name,
                         checkpoint_dir=checkpoint_dir, 
-                        base_model_name=base_model_name
+                        base_model_name=base_model_name,
+                        data_config=data_config
                     )
                     return result
             else:

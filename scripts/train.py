@@ -17,7 +17,7 @@ from src.utils.mlflow_logging import mlflow_logging
 # from peft import LoraConfig, TaskType
 
 
-@mlflow_logging("Whisper_LoRA_Experiment", "lora")
+@mlflow_logging("Whisper_Experiment", "lora")
 def main():
     parser = HfArgumentParser(
         (
@@ -105,7 +105,8 @@ def main():
     # trainer.save_state()
     return {
         'checkpoint_dir': training_args.output_dir,
-        'base_model_name': model_args.model_name_or_path
+        'base_model_name': model_args.model_name_or_path,
+        'data_config': data_args.__dict__
     }
 
 
