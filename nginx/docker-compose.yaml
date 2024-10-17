@@ -8,10 +8,11 @@ services:
     volumes:
       - ./audio_files:/app/audio_files 
     expose:
-      - "8000"
+      - 8000
     environment:
-      - MODEL_PATH=/app/models/asr_model  # Adjust this path as needed
+      - MODEL_PATH=sandy1990418/whisper-large-v3-turbo-chinese # Adjust this path as needed
       - LANGUAGE=chinese
+      - USE_GPU=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -26,7 +27,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./logs:/var/log/nginx
     ports:
-      - "80:80"
+      - 80:80
     depends_on:
       - asr-service
     networks:
