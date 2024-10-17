@@ -117,6 +117,7 @@ class DataArguments:
                 dataset_attr.audio = dataset_config["columns"].get("audio")
                 dataset_attr.target = dataset_config["columns"].get("target")
                 dataset_attr.language = dataset_config["columns"].get("language")
+                dataset_attr.kwargs = dataset_config["columns"].get("kwargs", None)
 
             dataset_attr.dataset_args = dataset_config.get("dataset_args", [])
             dataset_attr.dataset_kwargs = dataset_config.get("dataset_kwargs", {})

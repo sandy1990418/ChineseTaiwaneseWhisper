@@ -58,7 +58,6 @@ class AudioDatasetPreparationStrategy(DatasetPreparationStrategy):
             data["language"] = language
         else:
             raise ValueError("You should provide language for dataset")
-
         if isinstance(data["target"], str):
             
             if not self.args.timestamp:
@@ -66,21 +65,30 @@ class AudioDatasetPreparationStrategy(DatasetPreparationStrategy):
                     {"start": 0.0, "end": 0.0, "text": data["target"]}
                 ]
             else:
-                data["target"] = [
-                    {
-                        "start": 0.0,
-                        "end": float(
-                            round(
-                                librosa.get_duration(
-                                    path=data["audio"]["path"]
-                                ),
-                                2,
-                            )
-                        ),
-                        "text": data["target"],
-                    }
-                ]
-
+                try:
+                    # TODO: 這邊有問題，不知道為什麼抓不到local的檔案
+                    data["target"] = [
+                        {
+                            "start": 0.0,
+                            "end": float(
+                                round(
+                                    librosa.get_duration(
+                                        path=data["audio"]["path"]
+                                    ),
+                                    2,
+                                )
+                            ),
+                            "text": data["target"],
+                        }
+                    ]
+                except FileNotFoundError:
+                    data["target"] = [
+                        {
+                            "start": 0.0,
+                            "end": round(data["duration"], 2),
+                            "text": data["target"],
+                        }
+                    ]
         elif isinstance(data["target"], list):
             data["target"] = [
                 {

@@ -7,17 +7,21 @@ import librosa
 import torch
 from typing import List, Dict, Any
 import re
+import opencc
+converter = opencc.OpenCC('s2t.json')
 
 
 def remove_punctuation(text: str or List[str]):
     punctuation = "!,.;:?、！，。；：？"
     if isinstance(text, str):
         text = re.sub(r"[{}]+".format(punctuation), "", text).strip()
+        text = converter.convert(text)  
         return text
     elif isinstance(text, list):
         result_text = []
         for t in text:
             t = re.sub(r"[{}]+".format(punctuation), "", t).strip()
+            t = converter.convert(t)
             result_text.append(t)
         return result_text
     else:
