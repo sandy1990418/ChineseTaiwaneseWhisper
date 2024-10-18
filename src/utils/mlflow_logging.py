@@ -36,7 +36,7 @@ def extract_metrics_from_trainer_state(trainer_state_path: str) -> Dict[str, flo
         trainer_state = json.load(f)
     
     if 'log_history' in trainer_state and trainer_state['log_history']:
-        last_log = trainer_state['log_history'][-1]
+        last_log = trainer_state['log_history']
         metrics = {k: v for k, v in last_log.items() if isinstance(v, (int, float))}
         return metrics
     
@@ -62,7 +62,8 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
         # lora_model: PeftModel,
         checkpoint_dir: str,
         base_model_name: str,
-        data_config: dict
+        data_config: dict,
+        train_dataset: str
         # model_name: str,
     ):
         start_time = time.time()
@@ -72,6 +73,7 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
             logger.info("Log Base model name")
             # Log base model name
             mlflow.log_param("base_model_name", base_model_name)
+            mlflow.log_param("train_dataset", train_dataset)
             for key, value in data_config.items():
                 mlflow.log_param(key, value)
             # Get the latest checkpoint
@@ -150,17 +152,20 @@ def mlflow_logging(experiment_name: str, model_type: str):
                     and "checkpoint_dir" in result
                     and "base_model_name" in result
                     and "data_config" in result
+                    and "train_dataset" in result
                 ):  
                     checkpoint_dir = result["checkpoint_dir"]
                     base_model_name = result["base_model_name"]
                     data_config = result['data_config']
+                    train_dataset = result['train_dataset']
                     # model_name = f"{experiment_name}_{model_type}_model"
 
                     mllogger(
                         experiment_name=experiment_name,
                         checkpoint_dir=checkpoint_dir, 
                         base_model_name=base_model_name,
-                        data_config=data_config
+                        data_config=data_config,
+                        train_dataset=train_dataset
                     )
                     return result
             else:

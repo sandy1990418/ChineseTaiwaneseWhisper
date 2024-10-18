@@ -63,6 +63,7 @@ def main():
     # processor.tokenizer.model_max_length = model.config.max_length
     # model.config.forced_decoder_ids = None
     # model.config.suppress_tokens = []
+    train_dataset_list = data_args.dataset
     train_dataset, eval_dataset = (
         ChineseTaiwaneseDataset.create_train_and_test_datasets(
             data_args,
@@ -106,7 +107,8 @@ def main():
     return {
         'checkpoint_dir': training_args.output_dir,
         'base_model_name': model_args.model_name_or_path,
-        'data_config': data_args.__dict__
+        'data_config': data_args.__dict__,
+        "train_dataset": train_dataset_list
     }
 
 

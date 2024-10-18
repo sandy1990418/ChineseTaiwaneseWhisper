@@ -91,7 +91,7 @@ def main(args):
 
     # Load dataset
     dataset = load_dataset(
-        args.dataset_path, args.language, split=args.split, streaming=args.streaming
+        args.dataset_path, args.language, split=args.split, streaming=args.streaming, trust_remote_code=True
     )
     if args.max_eval_samples:
         dataset = dataset.select(range(min(args.max_eval_samples, len(dataset))))
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset_path",
         type=str,
-        default="mozilla-foundation/common_voice_13_0",
+        default="mozilla-foundation/common_voice_16_1",
         help="Dataset path",
     )
     parser.add_argument("--language", type=str, required=True, help="language name")
