@@ -92,8 +92,8 @@ class ChineseTaiwaneseASRInference:
                     language_token = self.processor.tokenizer.decode(language_token)
                     language_token = re.search(r'<\|(.+?)\|>', language_token).group(1)
                 else:
-                    language_token = self.language_token
-
+                    language_token = self.language
+                
                 logger.info(f"The Language Token is {language_token}")
 
                 generated_ids = self.model.generate(
