@@ -10,6 +10,7 @@ from typing import Dict
 import functools
 from dotenv import load_dotenv
 
+
 load_dotenv(dotenv_path='./.env')
 
 LORA_LIST = ['lora', 'qlora', 'olora']
@@ -119,6 +120,7 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                 if os.path.exists(file_path):
                     mlflow.log_artifact(file_path, artifact_path)
 
+        mlflow.end_run(status='FINISHED')
         # Register model
         # model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
         # registered_model = mlflow.register_model(model_uri, model_name)

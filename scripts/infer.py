@@ -21,7 +21,8 @@ def get_wav_files(path: str) -> List[str]:
     List[str]: List of WAV file paths.
     """
     if os.path.isdir(path):
-        return [os.path.join(path, f) for f in os.listdir(path) if f.lower().endswith('.wav')]
+        files = [os.path.join(path, f) for f in os.listdir(path) if f.lower().endswith('.wav')]
+        return files
     elif os.path.isfile(path) and path.lower().endswith('.wav'):
         return [path]
     else:
@@ -112,21 +113,26 @@ def batch_inference(
     output_dir (str): Directory where the JSON file will be saved.
     """
     results = []
-    if 'wav' not in audio_files:
-        audio_files = get_wav_files(audio_files[0])
-
+    audio_files_dir = []
     for file in tqdm.tqdm(audio_files):
+        if 'wav' not in file:
+            audio_files = get_wav_files(file)
+            audio_files_dir.extend(audio_files)
+        else:
+            audio_files_dir.append(file)
+
+    for file in tqdm.tqdm(audio_files_dir):
         logger.info(f"Processing file: {file}")
         result = process_audio_file(inference, file)
         results.append(result)
 
-        output_file = os.path.join(output_dir, file_name)
-        try:
-            with open(output_file, "a+", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False, indent=4)
-            logger.info(f"Results written to {output_file}")
-        except Exception as e:
-            logger.error(f"Error writing results to JSON: {str(e)}")
+    output_file = os.path.join(output_dir, file_name)
+    try:
+        with open(output_file, "a+", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=4)
+        logger.info(f"Results written to {output_file}")
+    except Exception as e:
+        logger.error(f"Error writing results to JSON: {str(e)}")
 
 
 def stream_inference(inference, audio_file):

@@ -85,12 +85,15 @@ class ChineseTaiwaneseASRInference:
                 )
 
                 input_features = inputs.input_features.to(self.device)
-                # Detect Language
-                # https://discuss.huggingface.co/t/language-detection-with-whisper/26003/14
-                language_token = self.model.generate(input_features, max_new_tokens=1)[0, 1]
-                language_token = self.processor.tokenizer.decode(language_token)
-                language_token = re.search(r'<\|(.+?)\|>', language_token).group(1)
-                
+                if isinstance(self.language, type(None)):
+                    # Detect Language
+                    # https://discuss.huggingface.co/t/language-detection-with-whisper/26003/14
+                    language_token = self.model.generate(input_features, max_new_tokens=1)[0, 1]
+                    language_token = self.processor.tokenizer.decode(language_token)
+                    language_token = re.search(r'<\|(.+?)\|>', language_token).group(1)
+                else:
+                    language_token = self.language_token
+
                 logger.info(f"The Language Token is {language_token}")
 
                 generated_ids = self.model.generate(
@@ -263,7 +266,7 @@ class ChineseTaiwaneseASRInference:
         audio,
         sample_rate: int = 16000,
         target_sample_rate: int = 16000,
-        chunk_length: int = 480000,
+        chunk_length: int = 420000,
     ) -> List[np.ndarray]:
         """Process and pad or trim the audio array to chunk_length."""
         """Split audio into chunks of 30 seconds (480000 samples at 16kHz)."""
