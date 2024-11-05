@@ -133,7 +133,7 @@ class TextPreprocessor(PreporcessorStrategy):
                     else segment["end"] - 0.01
                 )
                 text = segment["text"]
-                text = remove_punctuation(text)
+                text = text  # remove_punctuation(text)
                 processed_text += f"<|{start_time:.2f}|>"
                 processed_text += f"{text}"
                 processed_text += f"<|{end_time:.2f}|>"
@@ -148,7 +148,7 @@ class TextPreprocessor(PreporcessorStrategy):
                 if round(audio_length * 100) % 2 == 0
                 else audio_length - 0.01
             )
-            target_text = remove_punctuation(target_text)
+            target_text = target_text  # remove_punctuation(target_text)
             # target_text = f"<|0.00|>{target_text}<|{audio_length:.2f}|>"
             target_text += "<|0.00|>"
             target_text += f"{text}"
@@ -161,11 +161,11 @@ class TextPreprocessor(PreporcessorStrategy):
             processed_text = ""
             for segment in target_text:
                 text = segment["text"]
-                text = remove_punctuation(text)
+                text = text  # remove_punctuation(text)
                 processed_text += f"{text}"
             target_text = processed_text
         else:
-            target_text = remove_punctuation(target_text)
+            target_text = target_text  # remove_punctuation(target_text)
             target_text = f"{target_text}"
 
         return target_text

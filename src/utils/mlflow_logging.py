@@ -5,15 +5,15 @@ from abc import ABC, abstractmethod
 from peft import PeftModel
 from src.utils.logging import logger
 import time
-from time import strftime,  localtime
+from time import strftime, localtime
 from typing import Dict
 import functools
 from dotenv import load_dotenv
 
 
-load_dotenv(dotenv_path='./.env')
+load_dotenv(dotenv_path="./.env")
 
-LORA_LIST = ['lora', 'qlora', 'olora']
+LORA_LIST = ["lora", "qlora", "olora"]
 
 
 def setup_mlflow():
@@ -33,14 +33,19 @@ def get_latest_checkpoint(base_path: str) -> str:
 
 
 def extract_metrics_from_trainer_state(trainer_state_path: str) -> Dict[str, float]:
-    with open(trainer_state_path, 'r') as f:
+    with open(trainer_state_path, "r") as f:
         trainer_state = json.load(f)
-    
-    if 'log_history' in trainer_state and trainer_state['log_history']:
-        last_log = trainer_state['log_history']
-        metrics = {k: v for k, v in last_log.items() if isinstance(v, (int, float))}
+
+    if "log_history" in trainer_state and trainer_state["log_history"]:
+        last_log = trainer_state["log_history"]
+        metrics = {
+            k: v
+            for item in last_log
+            for k, v in item.items()
+            if isinstance(v, (int, float))
+        }
         return metrics
-    
+
     return {}
 
 
@@ -53,7 +58,9 @@ class MLflowLogger(ABC):
         base_model_name: str,
         model_name: str,
     ):
-        raise NotImplementedError("If you want to customize MLflow to track your work, please implement it here.")
+        raise NotImplementedError(
+            "If you want to customize MLflow to track your work, please implement it here."
+        )
 
 
 class WhisperLoRAMLflowLogger(MLflowLogger):
@@ -64,11 +71,13 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
         checkpoint_dir: str,
         base_model_name: str,
         data_config: dict,
-        train_dataset: str
+        train_dataset: str,
         # model_name: str,
     ):
         start_time = time.time()
-        run_name = f"{experiment_name}_{strftime('%Y-%m-%d %H:%M:%S', localtime(start_time))}"
+        run_name = (
+            f"{experiment_name}_{strftime('%Y-%m-%d %H:%M:%S', localtime(start_time))}"
+        )
 
         with mlflow.start_run(run_name=run_name):
             logger.info("Log Base model name")
@@ -112,7 +121,7 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                 "train_results.json",
                 "trainer_state.json",
                 "training_args.bin",
-                "vocab.json"
+                "vocab.json",
             ]
 
             for file in lora_files:
@@ -120,7 +129,7 @@ class WhisperLoRAMLflowLogger(MLflowLogger):
                 if os.path.exists(file_path):
                     mlflow.log_artifact(file_path, artifact_path)
 
-        mlflow.end_run(status='FINISHED')
+        mlflow.end_run(status="FINISHED")
         # Register model
         # model_uri = f"runs:/{mlflow.active_run().info.run_id}/{artifact_path}"
         # registered_model = mlflow.register_model(model_uri, model_name)
@@ -155,25 +164,26 @@ def mlflow_logging(experiment_name: str, model_type: str):
                     and "base_model_name" in result
                     and "data_config" in result
                     and "train_dataset" in result
-                ):  
+                ):
                     checkpoint_dir = result["checkpoint_dir"]
                     base_model_name = result["base_model_name"]
-                    data_config = result['data_config']
-                    train_dataset = result['train_dataset']
+                    data_config = result["data_config"]
+                    train_dataset = result["train_dataset"]
                     # model_name = f"{experiment_name}_{model_type}_model"
 
                     mllogger(
                         experiment_name=experiment_name,
-                        checkpoint_dir=checkpoint_dir, 
+                        checkpoint_dir=checkpoint_dir,
                         base_model_name=base_model_name,
                         data_config=data_config,
-                        train_dataset=train_dataset
+                        train_dataset=train_dataset,
                     )
                     return result
             else:
                 return func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
