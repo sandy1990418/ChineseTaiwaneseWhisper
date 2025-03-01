@@ -58,8 +58,8 @@ ChineseTaiwaneseWhisper/
 ```bash
 python scripts/train.py --model_name_or_path "openai/whisper-small" \
                         --language "chinese" \
-                        --dataset_name "common_voice_13_train" \
-                        --youtube_data_dir "./youtube_data" \
+                        --dataset "common_voice_13_train" \
+                        --dataset_dir "./youtube_data" \
                         --output_dir "./whisper-finetuned-zh-tw" \
                         --num_train_epochs 3 \
                         --per_device_train_batch_size 16 \
@@ -89,9 +89,8 @@ python scripts/train.py --model_name_or_path "openai/whisper-small" \
 |----------|-------------|---------|
 | `--model_name_or_path` | Path or name of the pre-trained model | Required |
 | `--language` | Language for fine-tuning (e.g., "chinese", "taiwanese") | Required |
-| `--dataset_name` | Name of the dataset to use | Required |
-| `--dataset_config_names` | Configuration name for the dataset | Required |
-| `--youtube_data_dir` | Directory containing YouTube data | Optional |
+| `--dataset` | Name of the dataset to use | Required |
+| `--dataset_dir` | The name of the folder containing datasets. |
 | `--output_dir` | Directory to save the fine-tuned model | Required |
 | `--num_train_epochs` | Number of training epochs | 3 |
 | `--per_device_train_batch_size` | Batch size per GPU/CPU for training | 16 |
